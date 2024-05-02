@@ -851,7 +851,9 @@ extension RtcManagerTrackHelper on RtcManager {
     try {
       await rtc.Helper.setAppleAudioConfiguration(
         rtc.AppleAudioConfiguration(
-          appleAudioMode: rtc.AppleAudioMode.videoChat,
+          // Bliq's fork change - start
+          appleAudioMode: rtc.AppleAudioMode.spokenAudio,
+          // Bliq's fork change - end
           appleAudioCategory: rtc.AppleAudioCategory.playAndRecord,
           appleAudioCategoryOptions: {
             rtc.AppleAudioCategoryOption.mixWithOthers,
