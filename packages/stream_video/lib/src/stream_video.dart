@@ -55,7 +55,7 @@ const _idEvents = 1;
 const _idAppState = 2;
 const _idActiveCall = 4;
 
-const _defaultCoordinatorRpcUrl = 'https://video.stream-io-api.com/video';
+const _defaultCoordinatorRpcUrl = 'https://video.stream-io-api.com';
 const _defaultCoordinatorWsUrl = 'wss://video.stream-io-api.com/video/connect';
 
 /// Handler function used for logging.
@@ -493,7 +493,9 @@ class StreamVideo extends Disposable {
       coordinatorClient: _client,
       currentUser: _state.user,
       setActiveCall: _state.setActiveCall,
-      getActiveCallCid: _state.getActiveCallCid,
+      setOutgoingCall: _state.setOutgoingCall,
+      getActiveCall: _state.getActiveCall,
+      getOutgoingCall: _state.getOutgoingCall,
       retryPolicy: _options.retryPolicy,
       sdpPolicy: _options.sdpPolicy,
       preferences: preferences,
@@ -509,7 +511,9 @@ class StreamVideo extends Disposable {
       coordinatorClient: _client,
       currentUser: _state.user,
       setActiveCall: _state.setActiveCall,
-      getActiveCallCid: _state.getActiveCallCid,
+      setOutgoingCall: _state.setOutgoingCall,
+      getActiveCall: _state.getActiveCall,
+      getOutgoingCall: _state.getOutgoingCall,
       retryPolicy: _options.retryPolicy,
       sdpPolicy: _options.sdpPolicy,
       preferences: preferences,
@@ -522,7 +526,7 @@ class StreamVideo extends Disposable {
     String? next,
     String? prev,
     int? limit,
-    List<open.SortParamRequest>? sorts,
+    List<open.SortParam>? sorts,
   }) {
     return _client.queryCalls(
       filterConditions: filterConditions,
@@ -549,7 +553,6 @@ class StreamVideo extends Disposable {
       id: pushToken,
       pushProvider: pushProvider,
       pushProviderName: pushProviderName,
-      userId: currentUser.id,
       voipToken: voipToken,
     );
   }
@@ -594,11 +597,6 @@ class StreamVideo extends Disposable {
     final sender = payload['sender'] as String?;
     if (sender != 'stream.video') return false;
 
-    // Only handle ringing calls.
-    final type = payload['type'] as String?;
-    if (type != 'call.ring') return false;
-
-    // Return if the payload does not contain a call cid.
     final callCid = payload['call_cid'] as String?;
     if (callCid == null) return false;
 
@@ -614,6 +612,22 @@ class StreamVideo extends Disposable {
 
     final createdById = payload['created_by_id'] as String?;
     final createdByName = payload['created_by_display_name'] as String?;
+
+    final type = payload['type'] as String?;
+    if (type == 'call.missed') {
+      unawaited(
+        manager.showMissedCall(
+          uuid: callUUID,
+          handle: createdById,
+          nameCaller: createdByName,
+          callCid: callCid,
+        ),
+      );
+
+      return true;
+    } else if (type != 'call.ring') {
+      return false;
+    }
 
     final callRingingState = await getCallRingingState(
       // ignore: deprecated_member_use_from_same_package
@@ -638,14 +652,6 @@ class StreamVideo extends Disposable {
       case CallRingingState.rejected:
         return false;
       case CallRingingState.ended:
-        unawaited(
-          manager.showMissedCall(
-            uuid: callUUID,
-            handle: createdById,
-            nameCaller: createdByName,
-            callCid: callCid,
-          ),
-        );
         return false;
     }
   }
@@ -719,7 +725,7 @@ class StreamVideo extends Disposable {
     }
 
     if (_state.incomingCall.valueOrNull?.callCid.value == cid) {
-      return Result.success(_state.incomingCall.value);
+      return Result.success(_state.incomingCall.value!);
     }
 
     final callCid = StreamCallCid(cid: cid);

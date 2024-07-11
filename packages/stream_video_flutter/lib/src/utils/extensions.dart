@@ -1,7 +1,5 @@
 import 'dart:math';
 
-import '../../stream_video_flutter.dart';
-
 /// Extensions on [String].
 extension StringExtension on String {
   /// Returns initials for a string
@@ -47,44 +45,5 @@ extension DoubleExtension on double {
   /// Ensures that this value lies in the specified range.
   double coerceIn(double minimumValue, double maximumValue) {
     return max(minimumValue, min(this, maximumValue));
-  }
-}
-
-extension CallParticipantExtension on CallParticipantState {
-  /// Maps [CallParticipantState] into [UserInfo].
-  UserInfo toUserInfo() => UserInfo(
-        id: userId,
-        role: role,
-        name: name.ifEmpty(() => userId),
-        image: image,
-      );
-}
-
-extension CallStatusExtension on CallStatus {
-  /// Returns human readable text representation of [CallStatus].
-  String toStatusString() {
-    if (isIdle) {
-      return 'Idle';
-    } else if (isOutgoing) {
-      return 'Outgoing';
-    } else if (isIncoming) {
-      return 'Incoming';
-    } else if (isJoining) {
-      return 'Joining';
-    } else if (isJoined) {
-      return 'Joined';
-    } else if (isReconnecting) {
-      return 'Reconnecting';
-    } else if (isMigrating) {
-      return 'Migrating';
-    } else if (isConnecting) {
-      return 'Connecting';
-    } else if (isConnected) {
-      return 'Connected';
-    } else if (isDisconnected) {
-      return 'Disconnected';
-    } else {
-      return '';
-    }
   }
 }

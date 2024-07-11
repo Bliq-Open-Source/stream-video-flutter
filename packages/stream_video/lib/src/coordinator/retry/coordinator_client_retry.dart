@@ -64,7 +64,6 @@ class CoordinatorClientRetry extends CoordinatorClient {
         id: id,
         pushProvider: pushProvider,
         pushProviderName: pushProviderName,
-        userId: userId,
         voipToken: voipToken,
       ),
       (error, nextAttemptDelay) async {
@@ -266,9 +265,10 @@ class CoordinatorClientRetry extends CoordinatorClient {
   }
 
   @override
-  Future<Result<None>> rejectCall({required StreamCallCid cid}) {
+  Future<Result<None>> rejectCall(
+      {required StreamCallCid cid, String? reason}) {
     return _retryManager.execute(
-      () => _delegate.rejectCall(cid: cid),
+      () => _delegate.rejectCall(cid: cid, reason: reason),
       (error, nextAttemptDelay) async {
         _logRetry('rejectCall', error, nextAttemptDelay);
       },
@@ -330,7 +330,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
     required Map<String, Object> filterConditions,
     String? next,
     String? prev,
-    List<open.SortParamRequest> sorts = const [],
+    List<open.SortParam> sorts = const [],
     int? limit,
   }) {
     return _retryManager.execute(
@@ -353,7 +353,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
     required Map<String, Object> filterConditions,
     String? next,
     String? prev,
-    List<open.SortParamRequest> sorts = const [],
+    List<open.SortParam> sorts = const [],
     int? limit,
   }) {
     return _retryManager.execute(
@@ -436,9 +436,15 @@ class CoordinatorClientRetry extends CoordinatorClient {
   }
 
   @override
-  Future<Result<None>> startRecording(StreamCallCid callCid) {
+  Future<Result<None>> startRecording(
+    StreamCallCid callCid, {
+    String? recordingExternalStorage,
+  }) {
     return _retryManager.execute(
-      () => _delegate.startRecording(callCid),
+      () => _delegate.startRecording(
+        callCid,
+        recordingExternalStorage: recordingExternalStorage,
+      ),
       (error, nextAttemptDelay) async {
         _logRetry('startRecording', error, nextAttemptDelay);
       },
@@ -448,10 +454,9 @@ class CoordinatorClientRetry extends CoordinatorClient {
   @override
   Future<Result<List<open.CallRecording>>> listRecordings(
     StreamCallCid callCid,
-    String sessionId,
   ) {
     return _retryManager.execute(
-      () => _delegate.listRecordings(callCid, sessionId),
+      () => _delegate.listRecordings(callCid),
       (error, nextAttemptDelay) async {
         _logRetry('listRecordings', error, nextAttemptDelay);
       },
@@ -571,18 +576,14 @@ class CoordinatorClientRetry extends CoordinatorClient {
   Future<Result<GuestCreatedData>> loadGuest({
     required String id,
     String? name,
-    String? role,
     String? image,
-    List<String>? teams,
     Map<String, Object> custom = const {},
   }) {
     return _retryManager.execute(
       () => _delegate.loadGuest(
         id: id,
         name: name,
-        role: role,
         image: image,
-        teams: teams,
         custom: custom,
       ),
       (error, nextAttemptDelay) async {
