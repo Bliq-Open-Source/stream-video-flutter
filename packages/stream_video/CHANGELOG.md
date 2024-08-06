@@ -1,3 +1,35 @@
+## 0.5.0
+
+✅ Added
+* Picture in Picture (PiP) is now also supported on iOS. For more information, refer to the [documentation](https://getstream.io/video/docs/flutter/advanced/picture_in_picture/)
+
+🐞 Fixed
+* Fixed an issue where the microphone was being muted when the app was running in the background on Android versions greater than 14.
+
+🚧 Breaking changes
+* The implementation of `BroadcastSampleHandler`, used for `broadcast` screen-sharing mode on iOS is now moved from `stream_video_flutter` package to a separate [stream_video_screen_sharing](https://pub.dev/packages/stream_video_screen_sharing) package.
+Migration steps:
+- Add `stream_video_screen_sharing` dependency to your `pubspec.yaml` file
+- Replace the import in `SampleHandler.swift` file from `stream_video_flutter` to `stream_video_screen_sharing`
+- Replace the dependancy added to the extension target in `Podfile` file from `stream_video_flutter` to `stream_video_screen_sharing`
+
+For complete screen-sharing guide please refer to the [documentaiton](https://getstream.io/video/docs/flutter/advanced/screen_sharing/)
+
+* Previously deprecated `String` `type` parameters in `makeCall()` and `getCallRingingState()` methods are now removed. Use `StreamCallType` `callType` parameter now.
+* Previously deprecated `events` and `coordinatorEvents` streams are now removed from `Call` class. Use `callEvents` instead.
+
+## 0.4.4
+
+✅ Added
+* Added `watch` parameter to `StreamVideo.queryCalls()` method, allowing you to subscribe to queried call events.  For more information, refer to the [documentation](https://getstream.io/video/docs/flutter/querying-calls/).
+* Introduced `listRecordings()` to `StreamVideo` object, enabling you to query call recordings using a provided call CID.
+
+🔄 Changed
+* The default constructor for `StreamCallType` is now deprecated. Instead, use the `StreamCallType.defaultType()` factory constuctor.
+
+🐞 Fixed
+* Improved the quality of screen sharing. It now correctly respects the parameters set in `ScreenSharingConstraints` to adjust the quality. 
+
 ## 0.4.3
 
 🐞 Fixed
