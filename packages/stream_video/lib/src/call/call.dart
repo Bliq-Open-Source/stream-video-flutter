@@ -289,6 +289,8 @@ class Call {
   CallConnectOptions _connectOptions = const CallConnectOptions();
   CallConnectOptions? _connectOptionsOverride;
 
+  final List<Timer> _reactionTimers = [];
+
   @override
   String toString() {
     return 'Call{cid: $callCid}';
@@ -389,30 +391,39 @@ class Call {
     } else if (event is CoordinatorCallBroadcastingStoppedEvent) {
       return _stateManager.coordinatorCallBroadcastingStopped(event);
     } else if (event is CoordinatorCallReactionEvent) {
+      _reactionTimers.add(
+        Timer(_preferences.reactionAutoDismissTime, () {
+          _stateManager.resetCallReaction(event.user.id);
+        }),
+      );
+
       return _stateManager.coordinatorCallReaction(event);
     }
   }
 
   Future<Result<None>> accept() async {
     final state = this.state.value;
-    _logger.i(() => '[reject] ${_status.value}; state: $state');
+    _logger.i(() => '[accept] ${_status.value}; state: $state');
+
     final status = state.status;
     if (status is! CallStatusIncoming || status.acceptedByMe) {
-      _logger.w(() => '[acceptCall] rejected (invalid status): $status');
+      _logger.w(() => '[accept] rejected (invalid status): $status');
       return Result.error('invalid status: $status');
     }
 
     final outgoingCall = _getOutgoingCall();
-    if (outgoingCall?.callCid != callCid) {
-      await outgoingCall?.reject(reason: CallRejectReason.cancel());
-      await outgoingCall?.leave();
+    if (outgoingCall != null && outgoingCall.callCid != callCid) {
+      _logger.i(() => '[accept] canceling outgoing call: $outgoingCall');
+      await outgoingCall.reject(reason: CallRejectReason.cancel());
+      await outgoingCall.leave();
       await _setOutgoingCall(null);
     }
 
     final activeCall = _getActiveCall();
-    if (activeCall?.callCid != callCid) {
-      await activeCall?.reject(reason: CallRejectReason.cancel());
-      await activeCall?.leave();
+    if (activeCall != null && activeCall.callCid != callCid) {
+      _logger.i(() => '[accept] canceling another active call: $activeCall');
+      await activeCall.reject(reason: CallRejectReason.cancel());
+      await activeCall.leave();
       await _setActiveCall(null);
     }
 
@@ -1028,6 +1039,9 @@ class Call {
 
   Future<void> _clear(String src) async {
     _logger.d(() => '[clear] src: $src');
+    for (final timer in _reactionTimers) {
+      timer.cancel();
+    }
     _status.value = _ConnectionStatus.disconnected;
     _subscriptions.cancelAll();
     _cancelables.cancelAll();
@@ -1284,6 +1298,7 @@ class Call {
     int? membersLimit,
     bool ringing = false,
     bool notify = false,
+    bool video = false,
   }) async {
     _logger.d(
       () => '[get] cid: $callCid, membersLimit: $membersLimit'
@@ -1300,6 +1315,7 @@ class Call {
       membersLimit: membersLimit,
       ringing: ringing,
       notify: notify,
+      video: video,
     );
 
     return response.fold(
@@ -1324,8 +1340,13 @@ class Call {
   Future<Result<CallReceivedOrCreatedData>> getOrCreate({
     List<String> memberIds = const [],
     bool ringing = false,
+    bool video = false,
     String? team,
     bool? notify,
+    DateTime? startsAt,
+    StreamBackstageSettings? backstage,
+    int? maxDuration,
+    int? maxParticipants,
     Map<String, Object> custom = const {},
   }) async {
     _logger.d(
@@ -1343,6 +1364,19 @@ class Call {
       await _setOutgoingCall(this);
     }
 
+    LimitsSettingsRequest? limits;
+    if (maxDuration != null || maxParticipants != null) {
+      limits = LimitsSettingsRequest(
+        maxDurationSeconds: maxDuration,
+        maxParticipants: maxParticipants,
+      );
+    }
+
+    final settingsOverride = CallSettingsRequest(
+      backstage: backstage?.toOpenDto(),
+      limits: limits,
+    );
+
     final response = await _coordinatorClient.getOrCreateCall(
       callCid: callCid,
       ringing: ringing,
@@ -1354,6 +1388,9 @@ class Call {
       }).toList(),
       team: team,
       notify: notify,
+      video: video,
+      startsAt: startsAt,
+      settingsOverride: settingsOverride,
       custom: custom,
     );
 
@@ -1382,6 +1419,7 @@ class Call {
   /// and joins the call immediately.
   Future<Result<CallJoinedData>> _joinCall({
     bool create = false,
+    bool video = false,
     String? migratingFrom,
     CallConnectOptions? connectOptions,
   }) async {
@@ -1390,6 +1428,7 @@ class Call {
       callCid: callCid,
       create: create,
       migratingFrom: migratingFrom,
+      video: video,
     );
     if (joinResult is! Success<CoordinatorJoined>) {
       _logger.e(() => '[joinCall] join failed: $joinResult');
@@ -1923,7 +1962,7 @@ class Call {
     required Map<String, Object> filterConditions,
     String? next,
     String? prev,
-    List<SortParam> sorts = const [],
+    List<SortParamRequest> sorts = const [],
     int? limit,
   }) {
     return _permissionsManager.queryMembers(

@@ -42,9 +42,7 @@ abstract class CoordinatorClient {
     bool? voipToken,
   });
 
-  Future<Result<List<PushDevice>>> listDevices({
-    required String userId,
-  });
+  Future<Result<List<PushDevice>>> listDevices();
 
   Future<Result<None>> deleteDevice({
     required String id,
@@ -56,6 +54,7 @@ abstract class CoordinatorClient {
     int? membersLimit,
     bool? ringing,
     bool? notify,
+    bool? video,
   });
 
   Future<Result<CallReceivedOrCreatedData>> getOrCreateCall({
@@ -64,6 +63,9 @@ abstract class CoordinatorClient {
     List<open.MemberRequest>? members,
     String? team,
     bool? notify,
+    bool? video,
+    DateTime? startsAt,
+    open.CallSettingsRequest? settingsOverride,
     Map<String, Object> custom = const {},
   });
 
@@ -73,6 +75,7 @@ abstract class CoordinatorClient {
     bool? ringing,
     bool? create,
     String? migratingFrom,
+    bool? video,
   });
 
   Future<Result<None>> acceptCall({required StreamCallCid cid});
@@ -177,7 +180,7 @@ abstract class CoordinatorClient {
     required Map<String, Object> filterConditions,
     String? next,
     String? prev,
-    List<open.SortParam> sorts = const [],
+    List<open.SortParamRequest> sorts = const [],
     int? limit,
   });
 
@@ -185,7 +188,7 @@ abstract class CoordinatorClient {
     required Map<String, Object> filterConditions,
     String? next,
     String? prev,
-    List<open.SortParam> sorts = const [],
+    List<open.SortParamRequest> sorts = const [],
     int? limit,
     bool? watch,
   });
