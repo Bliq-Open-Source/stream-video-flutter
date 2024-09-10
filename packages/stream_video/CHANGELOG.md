@@ -1,3 +1,25 @@
+## 0.5.2
+
+🔄 Changed
+* `SortParam` changed to `SortParamRequest` in `queryMembers()` method inside `Call` and `StreamVideo` class
+
+## 0.5.1
+
+✅ Added
+* Added `backstage` parameter to `call.getOtCreate()` method with backstage settings. For more information, refer to the [documentation](https://getstream.io/video/docs/flutter/joining-and-creating-calls/#backstage-setup)
+    * Ability to join call in advance with `joinAheadTimeSeconds` parameter (part of `StreamBackstageSettings`)
+* Added `startsAt` parameter to `call.getOtCreate()` method
+* Added `maxDuration` and `maxParticipants` parameters to `call.getOtCreate()` method
+* Added `video` parameter to `call.getOtCreate()`, `call.getCall()` and `call.join()` methods. This parameter is used to distinguish between audio-only and video calls for ringing purposes.
+    * ❗Important❗ the `video` parameter is `false` by default. If you want your call to be treated as a video call while ringing set it to `true`.
+
+🐞 Fixed
+* Fixed reaction dismissal: Sent and received reactions are now correctly dismissed after a 5-second timeout (configurable in `CallPreferences`).
+* Fixed the cancel button behavior in the screen-sharing notification on Android. It will now correctly stop the screen-sharing process.
+* Fixed the issue with the cancel button in the call-in-progress notification was not stopping the call.
+* Fixed the connection quality updates for other call participants.
+* Fixed an issue where declining a ringing call when the app was in a terminated state did not stop the ringing on the caller's end.
+
 ## 0.5.0
 
 ✅ Added

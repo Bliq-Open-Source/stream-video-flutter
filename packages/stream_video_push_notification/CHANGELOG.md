@@ -1,3 +1,11 @@
+## 0.5.2
+
+🐞 Fixed
+* Fixed CallKit integration on iOS when app is in a terminated state. It now correctly openes the app when the call is accepted.
+
+## 0.5.1
+* Sync version with `stream_video_flutter` 0.5.1
+
 ## 0.5.0
 
 🐞 Fixed

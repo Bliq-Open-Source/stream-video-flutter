@@ -4,36 +4,18 @@ import 'package:uuid/uuid.dart';
 
 import '../../../../open_api/video/coordinator/api.dart' as open;
 import '../../../composed_version.dart';
+import '../../../stream_video.dart';
 import '../../errors/video_error.dart';
 import '../../errors/video_error_composer.dart';
 import '../../latency/latency_service.dart';
 import '../../location/location_service.dart';
-import '../../logger/impl/tagged_logger.dart';
-import '../../models/call_cid.dart';
-import '../../models/call_created_data.dart';
-import '../../models/call_metadata.dart';
-import '../../models/call_permission.dart';
-import '../../models/call_reaction.dart';
-import '../../models/call_received_created_data.dart';
 import '../../models/call_received_data.dart';
-import '../../models/call_settings.dart';
-import '../../models/guest_created_data.dart';
-import '../../models/push_device.dart';
-import '../../models/push_provider.dart';
-import '../../models/queried_calls.dart';
-import '../../models/queried_members.dart';
-import '../../models/user_info.dart';
 import '../../retry/retry_policy.dart';
 import '../../shared_emitter.dart';
 import '../../state_emitter.dart';
-import '../../token/token.dart';
 import '../../token/token_manager.dart';
-import '../../utils/none.dart';
-import '../../utils/result.dart';
 import '../../utils/standard.dart';
-import '../coordinator_client.dart';
 import '../models/coordinator_connection_state.dart';
-import '../models/coordinator_events.dart';
 import '../models/coordinator_models.dart';
 import 'coordinator_ws.dart';
 import 'open_api_extensions.dart';
@@ -285,19 +267,15 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
 
   /// List devices used to receive Push Notifications.
   @override
-  Future<Result<List<PushDevice>>> listDevices({
-    required String userId,
-  }) async {
+  Future<Result<List<PushDevice>>> listDevices() async {
     try {
-      _logger.d(() => '[listDevices] userId: $userId');
+      _logger.d(() => '[listDevices]');
       final connectionResult = await _waitUntilConnected();
       if (connectionResult is Failure) {
         _logger.e(() => '[listDevices] no connection established');
         return connectionResult;
       }
-      final result = await _defaultApi.listDevices(
-        userId: userId,
-      );
+      final result = await _defaultApi.listDevices();
       _logger.v(() => '[listDevices] completed: $result');
       if (result == null) {
         return Result.error('listDevices result is null');
@@ -324,7 +302,6 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
       }
       final result = await _defaultApi.deleteDevice(
         id,
-        userId: userId,
       );
       _logger.v(() => '[deleteDevice] completed: $result');
       if (result == null) {
@@ -344,11 +321,13 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
     int? membersLimit,
     bool? ringing,
     bool? notify,
+    bool? video,
   }) async {
     try {
       _logger.d(
         () => '[getCall] cid: $callCid, ringing: $ringing'
-            ', membersLimit: $membersLimit, ringing: $ringing, notify: $notify',
+            ', membersLimit: $membersLimit, ringing: $ringing, notify: $notify'
+            ', video: $video',
       );
       final connectionResult = await _waitUntilConnected();
       if (connectionResult is Failure) {
@@ -361,6 +340,7 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
         membersLimit: membersLimit,
         ring: ringing,
         notify: notify,
+        video: video,
       );
       _logger.v(() => '[getCall] completed: $result');
       if (result == null) {
@@ -391,12 +371,17 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
     List<open.MemberRequest>? members,
     String? team,
     bool? notify,
+    bool? video,
+    DateTime? startsAt,
+    CallSettingsRequest? settingsOverride,
     Map<String, Object> custom = const {},
   }) async {
     try {
       _logger.d(
         () => '[getOrCreateCall] cid: $callCid'
-            ', ringing: $ringing, members: $members',
+            ', ringing: $ringing, members: $members'
+            ', team: $team, notify: $notify, video: $video'
+            ', startsAt: $startsAt, settingsOverride: $settingsOverride',
       );
       final connectionResult = await _waitUntilConnected();
       if (connectionResult is Failure) {
@@ -410,10 +395,14 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
           data: open.CallRequest(
             members: members ?? [],
             team: team,
+            startsAt: startsAt,
+            video: video,
+            settingsOverride: settingsOverride,
             custom: custom,
           ),
           ring: ringing,
           notify: notify,
+          video: video,
         ),
       );
       _logger.v(() => '[getOrCreateCall] completed: $result');
@@ -449,11 +438,13 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
     bool? ringing,
     bool? create,
     String? migratingFrom,
+    bool? video,
   }) async {
     try {
       _logger.d(
         () => '[joinCall] cid: $callCid, dataCenterId: $datacenterId'
-            ', ringing: $ringing, create: $create',
+            ', ringing: $ringing, create: $create , migratingFrom: $migratingFrom'
+            ', video: $video',
       );
       final connectionResult = await _waitUntilConnected();
       if (connectionResult is Failure) {
@@ -470,6 +461,7 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
           ring: ringing,
           location: location,
           migratingFrom: migratingFrom,
+          video: video,
         ),
       );
       _logger.v(() => '[joinCall] completed: $result');
@@ -838,7 +830,7 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
     required Map<String, Object> filterConditions,
     String? next,
     String? prev,
-    List<open.SortParam> sorts = const [],
+    List<open.SortParamRequest> sorts = const [],
     int? limit,
   }) async {
     try {
@@ -873,7 +865,7 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
     required Map<String, Object> filterConditions,
     String? next,
     String? prev,
-    List<open.SortParam> sorts = const [],
+    List<open.SortParamRequest> sorts = const [],
     int? limit,
     bool? watch,
   }) async {

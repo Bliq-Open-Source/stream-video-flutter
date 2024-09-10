@@ -73,13 +73,9 @@ class CoordinatorClientRetry extends CoordinatorClient {
   }
 
   @override
-  Future<Result<List<PushDevice>>> listDevices({
-    required String userId,
-  }) {
+  Future<Result<List<PushDevice>>> listDevices() {
     return _retryManager.execute(
-      () => _delegate.listDevices(
-        userId: userId,
-      ),
+      _delegate.listDevices,
       (error, nextAttemptDelay) async {
         _logRetry('listDevices', error, nextAttemptDelay);
       },
@@ -124,6 +120,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
     int? membersLimit,
     bool? ringing,
     bool? notify,
+    bool? video,
   }) {
     return _retryManager.execute(
       () => _delegate.getCall(
@@ -131,6 +128,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
         membersLimit: membersLimit,
         ringing: ringing,
         notify: notify,
+        video: video,
       ),
       (error, nextAttemptDelay) async {
         _logRetry('getCall', error, nextAttemptDelay);
@@ -145,6 +143,9 @@ class CoordinatorClientRetry extends CoordinatorClient {
     List<open.MemberRequest>? members,
     String? team,
     bool? notify,
+    bool? video,
+    DateTime? startsAt,
+    open.CallSettingsRequest? settingsOverride,
     Map<String, Object> custom = const {},
   }) {
     return _retryManager.execute(
@@ -154,6 +155,9 @@ class CoordinatorClientRetry extends CoordinatorClient {
         members: members,
         team: team,
         notify: notify,
+        video: video,
+        startsAt: startsAt,
+        settingsOverride: settingsOverride,
         custom: custom,
       ),
       (error, nextAttemptDelay) async {
@@ -239,6 +243,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
     bool? ringing,
     bool? create,
     String? migratingFrom,
+    bool? video,
   }) {
     return _retryManager.execute(
       () => _delegate.joinCall(
@@ -247,6 +252,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
         ringing: ringing,
         create: create,
         migratingFrom: migratingFrom,
+        video: video,
       ),
       (error, nextAttemptDelay) async {
         _logRetry('joinCall', error, nextAttemptDelay);
@@ -332,7 +338,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
     required Map<String, Object> filterConditions,
     String? next,
     String? prev,
-    List<open.SortParam> sorts = const [],
+    List<open.SortParamRequest> sorts = const [],
     int? limit,
     bool? watch,
   }) {
@@ -357,7 +363,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
     required Map<String, Object> filterConditions,
     String? next,
     String? prev,
-    List<open.SortParam> sorts = const [],
+    List<open.SortParamRequest> sorts = const [],
     int? limit,
   }) {
     return _retryManager.execute(
