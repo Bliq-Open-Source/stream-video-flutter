@@ -19,10 +19,13 @@ class CallRtmpBroadcastStartedEvent {
     this.type = 'call.rtmp_broadcast_started',
   });
 
+  /// The unique identifier for a call (<type>:<id>)
   String callCid;
 
+  /// Date/time of creation
   DateTime createdAt;
 
+  /// Name of the given RTMP broadcast
   String name;
 
   /// The type of event: \"call.rtmp_broadcast_started\" in this case

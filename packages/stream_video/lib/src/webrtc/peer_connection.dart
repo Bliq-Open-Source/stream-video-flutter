@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
+import 'package:rxdart/rxdart.dart';
 
 import '../disposable.dart';
 import '../errors/video_error_composer.dart';
@@ -37,9 +38,8 @@ typedef OnIceCandidate = void Function(
 /// {@template onIceCandidate}
 /// Handler whenever [rtc.RTCIceConnectionState]s is [rtc.RTCIceConnectionState.RTCIceConnectionStateFailed] or [rtc.RTCIceConnectionState.RTCIceConnectionStateDisconnected].
 /// {@endtemplate}
-typedef OnDisconnectedOrFailed = void Function(
+typedef OnIssue = void Function(
   StreamPeerConnection,
-  rtc.RTCIceConnectionState,
 );
 
 /// {@template onTrack}
@@ -91,7 +91,7 @@ class StreamPeerConnection extends Disposable {
   /// {@macro onIceCandidate}
   OnIceCandidate? onIceCandidate;
 
-  OnDisconnectedOrFailed? onDisconnectedOrFailed;
+  OnIssue? onIssue;
 
   /// {@macro onTrack}
   OnTrack? onTrack;
@@ -99,7 +99,8 @@ class StreamPeerConnection extends Disposable {
   /// {@macro onTrack}
   OnStats? onStats;
 
-  Stream<List<Map<String, dynamic>>> get statsStream => _statsController.stream;
+  Stream<List<Map<String, dynamic>>> get statsStream =>
+      _statsController.stream.startWith([]);
 
   final _pendingCandidates = <rtc.RTCIceCandidate>[];
 
@@ -328,8 +329,7 @@ class StreamPeerConnection extends Disposable {
         return _stopObservingStats();
       case rtc.RTCIceConnectionState.RTCIceConnectionStateFailed:
       case rtc.RTCIceConnectionState.RTCIceConnectionStateDisconnected:
-        onDisconnectedOrFailed?.call(this, state);
-        return _stopObservingStats();
+        onIssue?.call(this);
       default:
         break;
     }

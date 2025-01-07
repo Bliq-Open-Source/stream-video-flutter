@@ -13,6 +13,7 @@ import 'package:flutter_dogfooding/widgets/stream_button.dart';
 import 'package:stream_video_flutter/stream_video_flutter.dart';
 import 'package:stream_video_flutter/stream_video_flutter_background.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:stream_video_push_notification/stream_video_push_notification.dart';
 
 import '../app/user_auth_controller.dart';
 import '../di/injector.dart';
@@ -43,13 +44,14 @@ class _HomeScreenState extends State<HomeScreen> {
       Permission.microphone,
     ].request();
 
+    StreamVideoPushNotificationManager.ensureFullScreenIntentPermission();
+
     StreamBackgroundService.init(
       StreamVideo.instance,
       onButtonClick: (call, type, serviceType) async {
         switch (serviceType) {
           case ServiceType.call:
-            call.reject();
-            call.leave();
+            call.reject(reason: CallRejectReason.cancel());
           case ServiceType.screenSharing:
             StreamVideoFlutterBackground.stopService(ServiceType.screenSharing);
             call.setScreenShareEnabled(enabled: false);
@@ -70,26 +72,40 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isRinging = memberIds.isNotEmpty;
 
     try {
-      await _call!.getOrCreate(
+      final result = await _call!.getOrCreate(
         memberIds: memberIds,
         ringing: isRinging,
         video: true,
       );
+
+      result.fold(
+        success: (success) {
+          if (mounted) {
+            if (isRinging) {
+              CallRoute($extra: (
+                call: _call!,
+                connectOptions: null,
+              )).push(context);
+            } else {
+              LobbyRoute($extra: _call!).push(context);
+            }
+          }
+        },
+        failure: (failure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 20),
+              content: Text('Error: ${failure.error.message}'),
+            ),
+          );
+        },
+      );
     } catch (e, stk) {
       debugPrint('Error joining or creating call: $e');
       debugPrint(stk.toString());
-    }
-
-    if (mounted) {
-      hideLoadingIndicator(context);
-
-      if (isRinging) {
-        CallRoute($extra: (
-          call: _call!,
-          connectOptions: null,
-        )).push(context);
-      } else {
-        LobbyRoute($extra: _call!).push(context);
+    } finally {
+      if (mounted) {
+        hideLoadingIndicator(context);
       }
     }
   }
@@ -102,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context) {
           return AlertDialog(
             title: Text(
-              'Enter the ID of the user you want to call',
+              'Enter the IDs of users you want to call (separated by commas)',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             content: Column(
@@ -125,7 +141,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.white),
                       onPressed: () {
                         Navigator.of(context).pop();
-                        _getOrCreateCall(memberIds: [controller.text]);
+                        _getOrCreateCall(
+                          memberIds: controller.text
+                              .split(',')
+                              .map((e) => e.trim())
+                              .toList(),
+                        );
                       },
                     ),
                   ),

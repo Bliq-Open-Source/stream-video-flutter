@@ -1,3 +1,33 @@
+## 0.6.1
+
+* Updated minimum Flutter version to 3.24.5
+
+✅ Added
+* Added the `StreamVideoPushNotificationManager.ensureFullScreenIntentPermission()` method. This resolves an issue on some Android 14 devices where full-screen notifications would not appear due to missing permissions.
+You can now invoke this method to show a settings screen, allowing users to enable the required permission if it's not already enabled.
+
+🐞 Fixed
+* Resolved an issue where CallKit calls would not connect when accepted while the screen was locked.
+
+## 0.6.0
+
+🔄 Dependency updates
+* Updated firebase dependencies to fix Xcode 16 build issues
+
+## 0.5.5
+* Sync version with `stream_video_flutter` 0.5.5
+
+## 0.5.4
+
+* Dependency updates
+    * **Flutter SDK** constraint updated to >=3.22.0 (**Dart SDK** to >=3.4.0 <4.0.0)
+    * **json_annotation** updated from ^4.8.0 to ^4.9.0
+    * **firebase_core updated** from ^2.15.1 to ^3.4.0
+    * **firebase_messaging** updated from ^14.5.0 to ^15.1.1
+
+## 0.5.3
+* Sync version with `stream_video_flutter` 0.5.3
+
 ## 0.5.2
 
 🐞 Fixed
@@ -58,7 +88,7 @@
 🐞 Fixed
 
 * Various fixes to call ringing and push notifications.
-- Fixes call ringing cancellation when app is terminated on iOS (requires additional setup - check Step 6 of the [APNS integration](https://getstream.io/video/docs/flutter/advanced/adding_ringing_and_callkit/#integrating-apns-for-ios)) in our documentation.
+- Fixes call ringing cancellation when app is terminated on iOS (requires additional setup - check Step 6 of the [APNS integration](https://getstream.io/video/docs/flutter/advanced/ringing_and_callkit/#integrating-apns-for-ios)) in our documentation.
 - Fixes late push notification handling on Android, where already ended call was ringing if the device was offline and the push was delivered with a delay.
 - Fixes call ringing cancellation when caller timed out while calling
 * Fixed action tap callback on Android call notification.

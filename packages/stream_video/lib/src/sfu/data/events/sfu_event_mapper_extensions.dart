@@ -87,6 +87,9 @@ extension SfuEventMapper on sfu_events.SfuEvent {
         return SfuJoinResponseEvent(
           callState: joinResponse.callState.toDomain(),
           isReconnected: joinResponse.reconnected,
+          fastReconnectDeadline: Duration(
+            seconds: joinResponse.fastReconnectDeadlineSeconds,
+          ),
         );
       case sfu_events.SfuEvent_EventPayload.participantJoined:
         return SfuParticipantJoinedEvent(
@@ -127,6 +130,7 @@ extension SfuEventMapper on sfu_events.SfuEvent {
             code: error.error.code.toDomain(),
             message: error.error.message,
             shouldRetry: error.error.shouldRetry,
+            reconnectStrategy: error.reconnectStrategy.toDomain(),
           ),
         );
       case sfu_events.SfuEvent_EventPayload.callGrantsUpdated:
@@ -150,6 +154,8 @@ extension SfuEventMapper on sfu_events.SfuEvent {
           callCid: payload.callCid,
           participant: payload.participant.toDomain(),
         );
+      case sfu_events.SfuEvent_EventPayload.participantMigrationComplete:
+        return const SfuParticipantMigrationCompleteEvent();
       default:
         return const SfuUnknownEvent();
     }
@@ -292,13 +298,32 @@ extension SfuErrorCodeExtension on sfu_models.ErrorCode {
   }
 }
 
+extension SfuWebsocketReconnectStrategyExtension
+    on sfu_models.WebsocketReconnectStrategy {
+  SfuReconnectionStrategy toDomain() {
+    switch (this) {
+      case sfu_models
+            .WebsocketReconnectStrategy.WEBSOCKET_RECONNECT_STRATEGY_DISCONNECT:
+        return SfuReconnectionStrategy.disconnect;
+      case sfu_models
+            .WebsocketReconnectStrategy.WEBSOCKET_RECONNECT_STRATEGY_FAST:
+        return SfuReconnectionStrategy.fast;
+      case sfu_models
+            .WebsocketReconnectStrategy.WEBSOCKET_RECONNECT_STRATEGY_REJOIN:
+        return SfuReconnectionStrategy.rejoin;
+      case sfu_models
+            .WebsocketReconnectStrategy.WEBSOCKET_RECONNECT_STRATEGY_MIGRATE:
+        return SfuReconnectionStrategy.migrate;
+      default:
+        return SfuReconnectionStrategy.unspecified;
+    }
+  }
+}
+
 /// TODO
 extension SfuAudioSenderExtension on sfu_events.AudioSender {
   SfuAudioSender toDomain() {
     return SfuAudioSender(
-      mediaRequest: SfuAudioMediaRequest(
-        channelCount: mediaRequest.channelCount,
-      ),
       codec: codec.toDomain(),
     );
   }
@@ -308,11 +333,6 @@ extension SfuAudioSenderExtension on sfu_events.AudioSender {
 extension SfuVideoSenderExtension on sfu_events.VideoSender {
   SfuVideoSender toDomain() {
     return SfuVideoSender(
-      mediaRequest: SfuVideoMediaRequest(
-        idealHeight: mediaRequest.idealHeight,
-        idealWidth: mediaRequest.idealWidth,
-        idealFrameRate: mediaRequest.idealFrameRate,
-      ),
       codec: codec.toDomain(),
       layers: layers.map((it) => it.toDomain()).toList(),
     );
@@ -323,12 +343,9 @@ extension SfuVideoSenderExtension on sfu_events.VideoSender {
 extension SfuCodecExtension on sfu_models.Codec {
   SfuCodec toDomain() {
     return SfuCodec(
-      payloadType: payloadType,
-      name: name,
-      fmtpLine: fmtpLine,
-      clockRate: clockRate,
-      encodingParameters: encodingParameters,
-      feedbacks: feedbacks,
+      mimeType: mimeType,
+      scalabilityMode: scalabilityMode,
+      fmtp: fmtp,
     );
   }
 }
@@ -339,26 +356,10 @@ extension on sfu_events.VideoLayerSetting {
       name: name,
       active: active,
       maxBitrate: maxBitrate,
+      maxFramerate: maxFramerate,
       scaleResolutionDownBy: scaleResolutionDownBy,
-      priority: priority.toDomain(),
+      scalabilityMode: scalabilityMode,
       codec: codec.toDomain(),
     );
-  }
-}
-
-extension on sfu_events.VideoLayerSetting_Priority {
-  SfuVideoLayerSettingPriority toDomain() {
-    switch (this) {
-      case sfu_events.VideoLayerSetting_Priority.PRIORITY_HIGH_UNSPECIFIED:
-        return SfuVideoLayerSettingPriority.high;
-      case sfu_events.VideoLayerSetting_Priority.PRIORITY_LOW:
-        return SfuVideoLayerSettingPriority.low;
-      case sfu_events.VideoLayerSetting_Priority.PRIORITY_MEDIUM:
-        return SfuVideoLayerSettingPriority.medium;
-      case sfu_events.VideoLayerSetting_Priority.PRIORITY_VERY_LOW:
-        return SfuVideoLayerSettingPriority.veryLow;
-      default:
-        throw StateError('unexpected VideoLayerSetting_Priority: $this');
-    }
   }
 }

@@ -166,8 +166,9 @@ mixin StateParticipantMixin on StateNotifier<CallState> {
     );
   }
 
-  void participantFlipCamera() {
+  void participantFlipCamera(RtcMediaDevice? videoDevice) {
     state = state.copyWith(
+      videoInputDevice: videoDevice,
       callParticipants: state.callParticipants.map((participant) {
         if (participant.isLocal) {
           final trackState = participant.publishedTracks[SfuTrackType.video];
@@ -287,6 +288,16 @@ mixin StateParticipantMixin on StateNotifier<CallState> {
         }
         return participant;
       }).toList(),
+    );
+  }
+
+  void setParticipantsCount({
+    required int totalCount,
+    required int anonymousCount,
+  }) {
+    state = state.copyWith(
+      participantCount: totalCount,
+      anonymousParticipantCount: anonymousCount,
     );
   }
 }

@@ -38,9 +38,10 @@ Future<void> _backgroundVoipCallHandler() async {
     user: User(info: userCredentials.userInfo),
     userToken: userCredentials.token.rawValue,
     options: const StreamVideoOptions(
-      logPriority: Priority.info,
+      logPriority: Priority.verbose,
       muteAudioWhenInBackground: true,
       muteVideoWhenInBackground: true,
+      keepConnectionsAliveWhenInBackground: true,
     ),
     pushNotificationManagerProvider: StreamVideoPushNotificationManager.create(
       iosPushProvider: const StreamVideoPushProvider.apn(
@@ -53,6 +54,7 @@ Future<void> _backgroundVoipCallHandler() async {
         appName: kAppName,
         ios: IOSParams(iconName: 'IconMask'),
       ),
+      registerApnDeviceToken: true,
     ),
   );
 }
@@ -191,9 +193,10 @@ StreamVideo _initStreamVideo(
     user: user,
     tokenLoader: tokenLoader,
     options: const StreamVideoOptions(
-      logPriority: Priority.info,
+      logPriority: Priority.verbose,
       muteAudioWhenInBackground: true,
       muteVideoWhenInBackground: true,
+      keepConnectionsAliveWhenInBackground: true,
     ),
     pushNotificationManagerProvider: StreamVideoPushNotificationManager.create(
       iosPushProvider: const StreamVideoPushProvider.apn(
@@ -207,6 +210,7 @@ StreamVideo _initStreamVideo(
         ios: IOSParams(iconName: 'IconMask'),
       ),
       backgroundVoipCallHandler: _backgroundVoipCallHandler,
+      registerApnDeviceToken: true,
     ),
   );
 

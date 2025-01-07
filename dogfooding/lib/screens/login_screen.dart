@@ -15,6 +15,7 @@ import 'package:flutter_dogfooding/widgets/stream_button.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:stream_video_flutter/stream_video_flutter.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // 🌎 Project imports:
 import '../di/injector.dart';
@@ -41,7 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final userInfo = UserInfo(
       role: 'admin',
-      id: googleUser.email,
+      id: createValidId(googleUser.email),
       name: googleUser.displayName ?? '',
       image: googleUser.photoUrl,
     );
@@ -55,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final userInfo = UserInfo(
       role: 'admin',
-      id: email.replaceAll('@', '_').replaceAll('.', '_'),
+      id: createValidId(email),
       name: email,
     );
 
@@ -81,9 +82,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // Register StreamVideo client with the user.
     final authController = locator.get<UserAuthController>();
-    await authController.login(user, environment);
 
-    if (mounted) hideLoadingIndicator(context);
+    try {
+      await authController.login(user, environment);
+    } catch (e, _) {
+      if (mounted) {
+        hideLoadingIndicator(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 20),
+            content: Text('Error: $e'),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -101,9 +113,10 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(
         backgroundColor: AppColorPalette.backgroundColor,
         actions: [
-          EnvironmentSwitcher(
-            currentEnvironment: _appPreferences.environment,
-          )
+          if (kDebugMode)
+            EnvironmentSwitcher(
+              currentEnvironment: _appPreferences.environment,
+            )
         ],
       ),
       body: SafeArea(
@@ -192,6 +205,21 @@ class _LoginScreenState extends State<LoginScreen> {
                     label: 'Join As Guest',
                   ),
                 ),
+                FutureBuilder<PackageInfo>(
+                  future: PackageInfo.fromPlatform(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const SizedBox.shrink();
+                    final platformInfo = snapshot.data;
+
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        'Version ${platformInfo?.version}+${platformInfo?.buildNumber}',
+                        style: theme.textTheme.labelSmall,
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -250,4 +278,8 @@ String randomId({int size = 21}) {
     id += _alphabet[(math.Random().nextDouble() * 64).floor() | 0];
   }
   return id;
+}
+
+String createValidId(String id) {
+  return id.replaceAll(RegExp(r'[^\w]'), '_');
 }

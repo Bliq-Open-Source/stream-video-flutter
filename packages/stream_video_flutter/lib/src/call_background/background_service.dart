@@ -189,7 +189,6 @@ class StreamBackgroundService {
           await onButtonClick.call(call, ButtonType.cancel, serviceType);
         } else {
           if (serviceType == ServiceType.call) {
-            await call.leave();
             await call.reject(reason: CallRejectReason.cancel());
           } else if (serviceType == ServiceType.screenSharing) {
             await StreamVideoFlutterBackground.stopService(
@@ -238,6 +237,12 @@ class StreamBackgroundService {
     NotificationOptionsBuilder optionsBuilder,
   ) {
     return call.state.listen((value) async {
+      _logger.v(() => '[listenState] call service update, state: $value');
+
+      if (value.status is CallStatusDisconnected) {
+        return;
+      }
+
       try {
         final result = await StreamVideoFlutterBackground.updateService(
           NotificationPayload(

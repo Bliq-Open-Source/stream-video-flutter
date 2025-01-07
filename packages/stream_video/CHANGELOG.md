@@ -1,3 +1,65 @@
+## 0.6.1
+
+* Updated minimum Flutter version to 3.24.5
+
+✅ Added
+* Added the 'call.collectUserFeedback()' method which allows users to send call quality rating. These ratings are visible on the Dashboard and are aggregated in call stats for easy tracking. For a sample implementation, please refer to the [cookbook](https://getstream.io/video/docs/flutter/ui-cookbook/call-quality-rating/).
+* Added device thermal status reporting to better optimize call quality.
+
+## 0.6.0
+
+This release introduces a major rework of the join/reconnect flow in the Call class to support Reconnect V2, enhancing reconnection handling across various scenarios. Most updates are within the internals of the Call class, though some changes are outward-facing, including a few breaking changes.
+
+🔄 Changed
+* `Call.reject()` method will now always call `Call.leave()` method internally.
+
+🚧 Breaking changes
+* Removed the deprecated `Call.joinLobby()` method.
+* The `maxDuration` and `maxParticipants` parameters of `Call.getOrCreate()` are now combined into the `StreamLimitsSettings? limits` parameter.
+
+🔄 Dependency updates
+* Updated Firebase dependencies to resolve Xcode 16 build issues.
+
+✅ Added
+* Added the `registerPushDevice` optional parameter (default is `true`) to the `StreamVideo.connect()` method,allowing the prevention of automatic push token registration.
+* Added `participantCount` and `anonymousParticipantCount` to `CallState` reflecting the current number of participants in the call.
+* Introduced the `watch` parameter to `Call.get()` and `Call.getOrCreate()` methods (default is `true`). When set to `true`, this enables the `Call` to listen for coordinator events and update its state accordingly, even before the call is joined (`Call.join()`).
+* Added support for `targetResolution` setting set on the Dashboard to determine the max resolution the video stream.
+* Introduced new API methods to give greater control over incoming video quality. `Call.setPreferredIncomingVideoResolution()` allows you to manually set a preferred video resolution, while `Call.setIncomingVideoEnabled()` enables or disables incoming video. For more details, refer to the [documentation](https://getstream.io/video/docs/flutter/manual-video-quality-selection/).
+
+🐞 Fixed
+* Automatic push token registration by `StreamVideo` now stores registered token in `SharedPreferences`, performing an API call only when the token changes.
+* Fixed premature ringing termination issues.
+* Resolved issues where ringing would not end when the caller terminates the call in an app-terminated state.
+* Fixed issue with call not ending in some cases when only one participant is left and `dropIfAloneInRingingFlow` is set to `true`.
+
+## 0.5.5
+
+🐞 Fixed
+* Migrated from `internet_connection_checker` to `internet_connection_checker_plus` due to [license issues](https://github.com/github/dmca/blob/master/2024/09/2024-09-04-internet-connection-checker-plus.md)
+
+## 0.5.4
+
+🐞 Fixed
+* Fixed an issue where active call foreground service was recreated after being stopped when ringing call was declined and in-app incoming screen was displayed.
+
+🚧 Breaking changes
+* The regular push notification handling has been removed from iOS, providing more control over the implementation. VoIP push notifications will continue to be handled as before. For more details, refer to the [documentation](https://getstream.io/video/docs/flutter/push-notifications/).
+
+* Dependency updates
+    * Flutter SDK constraint updated to >=3.22.0 (Dart SDK to >=3.4.0 <4.0.0)
+    * `internet_connection_checker` updated from ^1.0.0+1 to ^2.0.0
+    * `rxdart` updated from ^0.27.7 to ^0.28.0
+    * `web` updated from ^0.5.1 to ^1.0.0
+    * `web_socket_channel` updated from ^2.4.0 to ^3.0.1
+
+## 0.5.3
+
+🐞 Fixed
+* Improved video quality for a smoother experience.
+* Resolved an issue where the participant's state showed an empty roles list.
+* Fixed a bug that caused the CallKit ringing notification to continue after a call was accepted.
+
 ## 0.5.2
 
 🔄 Changed
@@ -196,7 +258,7 @@ Bug fixes
 🐞 Fixed
 
 * Various fixes to call ringing and push notifications.
-- Fixes call ringing cancellation when app is terminated on iOS (requires additional setup - check Step 6 of the [APNS integration](https://getstream.io/video/docs/flutter/advanced/adding_ringing_and_callkit/#integrating-apns-for-ios)) in our documentation.
+- Fixes call ringing cancellation when app is terminated on iOS (requires additional setup - check Step 6 of the [APNS integration](https://getstream.io/video/docs/flutter/advanced/ringing_and_callkit/#integrating-apns-for-ios)) in our documentation.
 - Fixes late push notification handling on Android, where already ended call was ringing if the device was offline and the push was delivered with a delay.
 - Fixes call ringing cancellation when caller timed out while calling
 * Fixed action tap callback on Android call notification.

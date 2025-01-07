@@ -262,6 +262,7 @@ class StreamVideo extends Disposable {
   /// Connects the user to the Stream Video service.
   Future<Result<UserToken>> connect({
     bool includeUserDetails = true,
+    bool registerPushDevice = true,
   }) async {
     if (currentUserType == UserType.anonymous) {
       _logger.w(() => '[connect] rejected (anonymous user)');
@@ -271,6 +272,7 @@ class StreamVideo extends Disposable {
     }
     _connectOperation ??= _connect(
       includeUserDetails: includeUserDetails,
+      registerPushDevice: registerPushDevice,
     ).asCancelable();
     return _connectOperation!
         .valueOrDefault(Result.error('connect was cancelled'))
@@ -293,6 +295,7 @@ class StreamVideo extends Disposable {
 
   Future<Result<UserToken>> _connect({
     bool includeUserDetails = false,
+    bool registerPushDevice = true,
   }) async {
     _logger.i(() => '[connect] currentUser.id: ${_state.currentUser.id}');
     if (_connectionState.isConnected) {
@@ -339,7 +342,9 @@ class StreamVideo extends Disposable {
       _subscriptions.add(_idAppState, lifecycle.appState.listen(_onAppState));
 
       // Register device with push notification manager.
-      pushNotificationManager?.registerDevice();
+      if (registerPushDevice) {
+        pushNotificationManager?.registerDevice();
+      }
 
       if (pushNotificationManager != null) {
         _subscriptions.add(
@@ -363,11 +368,12 @@ class StreamVideo extends Disposable {
     }
     try {
       await _connectOperation?.cancel();
-      await _client.disconnectUser();
-      _subscriptions.cancelAll();
 
       // Unregister device from push notification manager.
-      pushNotificationManager?.unregisterDevice();
+      await pushNotificationManager?.unregisterDevice();
+
+      await _client.disconnectUser();
+      _subscriptions.cancelAll();
 
       // Resetting the state.
       await _state.clear();
@@ -403,6 +409,7 @@ class StreamVideo extends Disposable {
         event.data.ringing) {
       _logger.v(() => '[onCoordinatorEvent] onCallRinging: ${event.data}');
       final call = _makeCallFromRinging(data: event.data);
+
       _state.incomingCall.value = call;
     } else if (event is CoordinatorConnectedEvent) {
       _logger.i(() => '[onCoordinatorEvent] connected ${event.userId}');
@@ -488,11 +495,7 @@ class StreamVideo extends Disposable {
         id: id,
       ),
       coordinatorClient: _client,
-      currentUser: _state.user,
-      setActiveCall: _state.setActiveCall,
-      setOutgoingCall: _state.setOutgoingCall,
-      getActiveCall: _state.getActiveCall,
-      getOutgoingCall: _state.getOutgoingCall,
+      streamVideo: this,
       retryPolicy: _options.retryPolicy,
       sdpPolicy: _options.sdpPolicy,
       preferences: preferences,
@@ -506,11 +509,7 @@ class StreamVideo extends Disposable {
     return Call.fromRinging(
       data: data,
       coordinatorClient: _client,
-      currentUser: _state.user,
-      setActiveCall: _state.setActiveCall,
-      setOutgoingCall: _state.setOutgoingCall,
-      getActiveCall: _state.getActiveCall,
-      getOutgoingCall: _state.getOutgoingCall,
+      streamVideo: this,
       retryPolicy: _options.retryPolicy,
       sdpPolicy: _options.sdpPolicy,
       preferences: preferences,
@@ -645,6 +644,7 @@ class StreamVideo extends Disposable {
       return;
     }
 
+    unawaited(callToJoin.join());
     onCallAccepted?.call(callToJoin);
   }
 
@@ -686,7 +686,10 @@ class StreamVideo extends Disposable {
   /// Handle incoming VoIP push notifications.
   ///
   /// Returns `true` if the notification was handled, `false` otherwise.
-  Future<bool> handleVoipPushNotification(Map<String, dynamic> payload) async {
+  Future<bool> handleVoipPushNotification(
+    Map<String, dynamic> payload, {
+    bool handleMissedCall = true,
+  }) async {
     _logger.d(() => '[handleVoipPushNotification] payload: $payload');
     final manager = pushNotificationManager;
     if (manager == null) {
@@ -716,7 +719,7 @@ class StreamVideo extends Disposable {
     final hasVideo = payload['video'] as String?;
 
     final type = payload['type'] as String?;
-    if (type == 'call.missed') {
+    if (handleMissedCall && type == 'call.missed') {
       unawaited(
         manager.showMissedCall(
           uuid: callUUID,
@@ -765,8 +768,7 @@ class StreamVideo extends Disposable {
       callType: callType,
       id: id,
     );
-
-    final callResult = await call.get();
+    final callResult = await call.get(watch: false);
 
     return callResult.fold(
       failure: (failure) {

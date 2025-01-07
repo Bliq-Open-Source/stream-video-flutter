@@ -10,7 +10,6 @@ import '../../errors/video_error_composer.dart';
 import '../../latency/latency_service.dart';
 import '../../location/location_service.dart';
 import '../../models/call_received_data.dart';
-import '../../retry/retry_policy.dart';
 import '../../shared_emitter.dart';
 import '../../state_emitter.dart';
 import '../../token/token_manager.dart';
@@ -229,6 +228,55 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
     );
   }
 
+  // Submit user feedback for the call
+  @override
+  Future<Result<None>> collectUserFeedback({
+    required String callType,
+    required String callId,
+    required String sessionId,
+    required int rating,
+    required String sdk,
+    required String sdkVersion,
+    required String userSessionId,
+    String? reason,
+    Map<String, Object>? custom,
+  }) async {
+    try {
+      final connectionResult = await _waitUntilConnected();
+      if (connectionResult is Failure) {
+        _logger.e(() => '[collectUserFeedback] no connection established');
+        return connectionResult;
+      }
+
+      final input = open.CollectUserFeedbackRequest(
+        custom: custom ?? {},
+        rating: rating,
+        reason: reason,
+        sdk: sdk,
+        sdkVersion: sdkVersion,
+        userSessionId: userSessionId,
+      );
+
+      _logger.d(() => '[collectUserFeedback] input: $input');
+      final result = await _defaultApi.collectUserFeedback(
+        callType,
+        callId,
+        sessionId,
+        input,
+      );
+
+      _logger.v(() => '[collectUserFeedback] completed: $result');
+      if (result == null) {
+        return Result.error('collectUserFeedback result is null');
+      }
+
+      return const Result.success(none);
+    } catch (e, stk) {
+      _logger.e(() => '[collectUserFeedback] failed: $e; $stk');
+      return Result.failure(VideoErrors.compose(e, stk));
+    }
+  }
+
   /// Create a new Device used to receive Push Notifications.
   @override
   Future<Result<None>> createDevice({
@@ -434,7 +482,6 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
   @override
   Future<Result<CoordinatorJoined>> joinCall({
     required StreamCallCid callCid,
-    String? datacenterId,
     bool? ringing,
     bool? create,
     String? migratingFrom,
@@ -442,7 +489,7 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
   }) async {
     try {
       _logger.d(
-        () => '[joinCall] cid: $callCid, dataCenterId: $datacenterId'
+        () => '[joinCall] cid: $callCid'
             ', ringing: $ringing, create: $create , migratingFrom: $migratingFrom'
             ', video: $video',
       );
@@ -482,6 +529,11 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
           users: result.members.toCallUsers(),
           duration: result.duration,
           reportingIntervalMs: result.statsOptions.reportingIntervalMs,
+          ownCapabilities: result.ownCapabilities
+              .map(
+                (it) => CallPermission.fromAlias(it.value),
+              )
+              .toList(),
         ),
       );
     } catch (e, stk) {
@@ -1061,6 +1113,7 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
     StreamTranscriptionSettings? transcription,
     StreamBackstageSettings? backstage,
     StreamGeofencingSettings? geofencing,
+    StreamLimitsSettings? limits,
   }) async {
     try {
       final connectionResult = await _waitUntilConnected();
@@ -1081,6 +1134,7 @@ class CoordinatorClientOpenApi extends CoordinatorClient {
             transcription: transcription?.toOpenDto(),
             backstage: backstage?.toOpenDto(),
             geofencing: geofencing?.toOpenDto(),
+            limits: limits?.toOpenDto(),
           ),
           custom: custom,
         ),

@@ -239,7 +239,6 @@ class CoordinatorClientRetry extends CoordinatorClient {
   @override
   Future<Result<CoordinatorJoined>> joinCall({
     required StreamCallCid callCid,
-    String? datacenterId,
     bool? ringing,
     bool? create,
     String? migratingFrom,
@@ -248,7 +247,6 @@ class CoordinatorClientRetry extends CoordinatorClient {
     return _retryManager.execute(
       () => _delegate.joinCall(
         callCid: callCid,
-        datacenterId: datacenterId,
         ringing: ringing,
         create: create,
         migratingFrom: migratingFrom,
@@ -331,6 +329,36 @@ class CoordinatorClientRetry extends CoordinatorClient {
   @override
   Future<Result<None>> disconnectUser() {
     return _delegate.disconnectUser();
+  }
+
+  @override
+  Future<Result<None>> collectUserFeedback({
+    required String callType,
+    required String callId,
+    required String sessionId,
+    required int rating,
+    required String sdk,
+    required String sdkVersion,
+    required String userSessionId,
+    String? reason,
+    Map<String, Object>? custom,
+  }) async {
+    return _retryManager.execute(
+      () => _delegate.collectUserFeedback(
+        callType: callType,
+        callId: callId,
+        sessionId: sessionId,
+        rating: rating,
+        sdk: sdk,
+        sdkVersion: sdkVersion,
+        userSessionId: userSessionId,
+        reason: reason,
+        custom: custom,
+      ),
+      (error, nextAttemptDelay) async {
+        _logRetry('collectUserFeedback', error, nextAttemptDelay);
+      },
+    );
   }
 
   @override
@@ -569,6 +597,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
     StreamTranscriptionSettings? transcription,
     StreamBackstageSettings? backstage,
     StreamGeofencingSettings? geofencing,
+    StreamLimitsSettings? limits,
   }) {
     return _retryManager.execute(
       () => _delegate.updateCall(
@@ -582,6 +611,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
         transcription: transcription,
         backstage: backstage,
         geofencing: geofencing,
+        limits: limits,
       ),
       (error, nextAttemptDelay) async {
         _logRetry('updateCall', error, nextAttemptDelay);

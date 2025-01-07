@@ -35,6 +35,18 @@ abstract class CoordinatorClient {
 
   Future<Result<None>> disconnectUser();
 
+  Future<Result<None>> collectUserFeedback({
+    required String callType,
+    required String callId,
+    required String sessionId,
+    required int rating,
+    required String sdk,
+    required String sdkVersion,
+    required String userSessionId,
+    String? reason,
+    Map<String, Object>? custom,
+  });
+
   Future<Result<None>> createDevice({
     required String id,
     required PushProvider pushProvider,
@@ -71,7 +83,6 @@ abstract class CoordinatorClient {
 
   Future<Result<models.CoordinatorJoined>> joinCall({
     required StreamCallCid callCid,
-    String? datacenterId,
     bool? ringing,
     bool? create,
     String? migratingFrom,
@@ -241,6 +252,7 @@ abstract class CoordinatorClient {
     StreamTranscriptionSettings? transcription,
     StreamBackstageSettings? backstage,
     StreamGeofencingSettings? geofencing,
+    StreamLimitsSettings? limits,
   });
 
   Future<Result<GuestCreatedData>> loadGuest({

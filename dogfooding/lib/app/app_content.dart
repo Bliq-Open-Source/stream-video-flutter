@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app_links/app_links.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -10,7 +11,6 @@ import 'package:flutter_dogfooding/theme/app_palette.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:stream_video_flutter/stream_video_flutter.dart';
-import 'package:uni_links/uni_links.dart';
 
 import '../core/repos/app_preferences.dart';
 import '../di/injector.dart';
@@ -98,6 +98,8 @@ class _StreamDogFoodingAppContentState
   }
 
   void _tryConsumingIncomingCallFromTerminatedState() {
+    if (CurrentPlatform.isIos) return;
+
     if (_router.routerDelegate.navigatorKey.currentContext == null) {
       // App is not running yet. Postpone consuming after app is in the foreground
       WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
@@ -152,6 +154,19 @@ class _StreamDogFoodingAppContentState
         },
       ),
     );
+
+    // UNCOMMENT THIS TO SHOW IN-APP INCOMING SCREEN
+    // _compositeSubscription.add(streamVideo.state.incomingCall.listen((call) {
+    //   if (call == null) return;
+
+    //   // Navigate to the call screen.
+    //   final extra = (
+    //     call: call,
+    //     connectOptions: null,
+    //   );
+
+    //   _router.push(CallRoute($extra: extra).location, extra: extra);
+    // }));
   }
 
   _observeFcmMessages() {
@@ -164,8 +179,8 @@ class _StreamDogFoodingAppContentState
   Future<void> _observeDeepLinks() async {
     // The app was in the background.
     if (!kIsWeb) {
-      final deepLinkSubscription = uriLinkStream.listen((uri) {
-        if (mounted && uri != null) _handleDeepLink(uri);
+      final deepLinkSubscription = AppLinks().uriLinkStream.listen((uri) {
+        if (mounted) _handleDeepLink(uri);
       });
 
       _compositeSubscription.add(deepLinkSubscription);
@@ -173,7 +188,7 @@ class _StreamDogFoodingAppContentState
 
     // The app was terminated.
     try {
-      final initialUri = await getInitialUri();
+      final initialUri = await AppLinks().getInitialLink();
       if (initialUri != null) _handleDeepLink(initialUri);
     } catch (e) {
       debugPrint(e.toString());
@@ -313,7 +328,9 @@ class _StreamDogFoodingAppContentState
             optionElevation: 2,
             inactiveOptionElevation: 2,
             optionBackgroundColor: AppColorPalette.buttonSecondary,
-            inactiveOptionBackgroundColor: colorTheme.overlay.withOpacity(0.4),
+            inactiveOptionBackgroundColor:
+                // ignore: deprecated_member_use
+                colorTheme.overlay.withOpacity(0.4),
             optionShape: const CircleBorder(),
             optionPadding: const EdgeInsets.all(14),
           ),
