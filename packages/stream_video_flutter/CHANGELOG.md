@@ -1,14 +1,33 @@
+## 0.7.2
+
+🐞 Fixed
+* Resolved an issue where accepting a second call while already on a call would not open the call screen correctly. [#840](https://github.com/GetStream/stream-video-flutter/pull/840) and [#834](https://github.com/GetStream/stream-video-flutter/pull/834)
+* **(Web)** Fixed web compilation issues. [#832](https://github.com/GetStream/stream-video-flutter/pull/832)
+* **(Web)** Addressed an issue where `battery_plus` and `thermal` packages were erroneously called on web. [#837](https://github.com/GetStream/stream-video-flutter/pull/837)
+* **(iOS)** Fixed an issue where Picture-in-Picture mode was not ended when the call ended. [#840](https://github.com/GetStream/stream-video-flutter/pull/840)
+* **(iOS)** Resolved an issue where CallKit calls sometimes were not terminated when the Stream call ended. [#840](https://github.com/GetStream/stream-video-flutter/pull/840)
+* **(iOS)** Fixed a missing app icon on the CallKit screen when the app was in a terminated state. [#841](https://github.com/GetStream/stream-video-flutter/pull/841)
+
+🔄 Changed
+* Deprecated the `handleVoipPushNotification()` method in the `StreamVideo` class. Use `handleRingingFlowNotifications()` instead.
+
+## 0.7.1
+
+🐞 Fixed
+* Resolved an issue where media tracks were not being disabled or enabled correctly. [#828](https://github.com/GetStream/stream-video-flutter/pull/828)
+* Fixed a problem causing anonymous users to fail when connecting and joining calls. [#827](https://github.com/GetStream/stream-video-flutter/pull/827)
+
 ## 0.7.0
 
 🚧 Breaking changes
-* The package is now compatible with Gradle 8. The minimum required Java version is now 17. https://github.com/GetStream/stream-video-flutter/pull/820
-* Updated the `flutter_callkit_incoming` package to version 2.5.0, which also requires Java 17. https://github.com/GetStream/stream-video-flutter/pull/820
+* The package is now compatible with Gradle 8. The minimum required Java version is now 17. [#820](https://github.com/GetStream/stream-video-flutter/pull/820)
+* Updated the `flutter_callkit_incoming` package to version 2.5.0, which also requires Java 17. [#820](https://github.com/GetStream/stream-video-flutter/pull/820)
 * The `resolution` parameter of `Call.setPreferredIncomingVideoResolution()` method changed type from `VideoResolution` to `VideoDimension`.
 * The `Call.onPermissionRequest` callback changed the event type passed as an argument from `CoordinatorCallPermissionRequestEvent` to `StreamCallPermissionRequestEvent`
 
 ✅ Added
-* Added out-of-the-box support for blur background filters and image filters. As well as the option to create custom video filters. For complete documentation of those features please check [here.](https://getstream.io/video/docs/flutter/advanced/apply-video-filters/) https://github.com/GetStream/stream-video-flutter/pull/799
-* Added support for Closed Captions. https://github.com/GetStream/stream-video-flutter/pull/796
+* Added out-of-the-box support for blur background filters and image filters. As well as the option to create custom video filters. For complete documentation of those features please check [here.](https://getstream.io/video/docs/flutter/advanced/apply-video-filters/) [#799](https://github.com/GetStream/stream-video-flutter/pull/799)
+* Added support for Closed Captions. [#796](https://github.com/GetStream/stream-video-flutter/pull/796)
      * Listen to the `Call.closedCaptions` stream to overlay captions during your call.
      * Use `CallPreferences` to configure: 
          * `closedCaptionsVisibilityDurationMs` for controlling how long captions are displayed.
@@ -17,11 +36,11 @@
      * Learn More:
          * Check the [guide](https://getstream.io/video/docs/flutter/closed-captions/) for integration steps.
          * Explore the [cookbook](https://getstream.io/video/docs/flutter/ui-cookbook/closed-captions/) for UI tips.
-* Dynamic codec negotiation during calls. https://github.com/GetStream/stream-video-flutter/pull/811
+* Dynamic codec negotiation during calls. [#811](https://github.com/GetStream/stream-video-flutter/pull/811)
 
 🐞 Fixed
-* Fixed issues when ending the call while in Picture in Picture mode on Android. https://github.com/GetStream/stream-video-flutter/pull/822
-* Fixes rejecting ringing call when CallEnd, instead of CallDecline, event is triggered by CallKit during ringing. https://github.com/GetStream/stream-video-flutter/pull/824
+* Fixed issues when ending the call while in Picture in Picture mode on Android. [#822](https://github.com/GetStream/stream-video-flutter/pull/822)
+* Fixes rejecting ringing call when CallEnd, instead of CallDecline, event is triggered by CallKit during ringing. [#824](https://github.com/GetStream/stream-video-flutter/pull/824)
 
 ## 0.6.1
 

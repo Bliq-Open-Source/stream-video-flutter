@@ -501,15 +501,13 @@ class Call {
     if (outgoingCall != null && outgoingCall.callCid != callCid) {
       _logger.i(() => '[accept] canceling outgoing call: $outgoingCall');
       await outgoingCall.reject(reason: CallRejectReason.cancel());
-
       await _streamVideo.state.setOutgoingCall(null);
     }
 
     final activeCall = _streamVideo.state.activeCall.valueOrNull;
     if (activeCall != null && activeCall.callCid != callCid) {
       _logger.i(() => '[accept] canceling another active call: $activeCall');
-      await activeCall.reject(reason: CallRejectReason.cancel());
-
+      await activeCall.leave(reason: DisconnectReason.ended());
       await _streamVideo.state.setActiveCall(null);
     }
 
@@ -910,6 +908,7 @@ class Call {
     StreamBackstageSettings? backstage,
     StreamGeofencingSettings? geofencing,
     StreamLimitsSettings? limits,
+    StreamBroadcastingSettings? broadcasting,
   }) {
     return _coordinatorClient.updateCall(
       callCid: callCid,
@@ -970,17 +969,23 @@ class Call {
         _logger.v(() => '[startSession] applying connect options');
         await _applyConnectOptions();
       },
+      isAnonymousUser:
+          _streamVideo.state.currentUser.type == UserType.anonymous,
     );
 
-    _subscriptions.add(
-      _idSessionStats,
-      StatsReporter(
-        rtcManager: session.rtcManager!,
-        stateManager: _stateManager,
-      ).run(interval: _preferences.callStatsReportingInterval).listen((stats) {
-        _stats.emit(stats);
-      }),
-    );
+    if (session.rtcManager != null) {
+      _subscriptions.add(
+        _idSessionStats,
+        StatsReporter(
+          rtcManager: session.rtcManager!,
+          stateManager: _stateManager,
+        )
+            .run(interval: _preferences.callStatsReportingInterval)
+            .listen((stats) {
+          _stats.emit(stats);
+        }),
+      );
+    }
 
     if (_statsReportingIntervalMs != null) {
       _sfuStatsReporter = SfuStatsReporter(
@@ -1004,6 +1009,8 @@ class Call {
 
   Future<void> _onSfuEvent(SfuEvent sfuEvent) async {
     if (sfuEvent is SfuParticipantLeftEvent) {
+      if (sfuEvent.callCid != callCid.value) return;
+
       final callParticipants = [...state.value.callParticipants]..removeWhere(
           (participant) =>
               participant.userId == sfuEvent.participant.userId &&
@@ -1261,8 +1268,15 @@ class Call {
     _cancelables.cancelAll();
     await _session?.dispose();
     await dynascaleManager.dispose();
-    await _streamVideo.state.setActiveCall(null);
-    await _streamVideo.state.setOutgoingCall(null);
+
+    if (_streamVideo.state.activeCall.valueOrNull?.callCid == callCid) {
+      await _streamVideo.state.setActiveCall(null);
+    }
+
+    if (_streamVideo.state.outgoingCall.valueOrNull?.callCid == callCid) {
+      await _streamVideo.state.setOutgoingCall(null);
+    }
+
     _logger.v(() => '[clear] completed');
   }
 
@@ -1686,6 +1700,8 @@ class Call {
     StreamLimitsSettings? limits,
     StreamRecordingSettings? recording,
     StreamTranscriptionSettings? transcription,
+    StreamBroadcastingSettings? broadcasting,
+    StreamGeofencingSettings? geofencing,
     Map<String, Object> custom = const {},
   }) async {
     _logger.d(
@@ -1706,6 +1722,8 @@ class Call {
       limits: limits?.toOpenDto(),
       transcription: transcription?.toOpenDto(),
       recording: recording?.toOpenDto(),
+      broadcasting: broadcasting?.toOpenDto(),
+      geofencing: geofencing?.toOpenDto(),
     );
 
     final response = await _coordinatorClient.getOrCreateCall(
@@ -2125,14 +2143,20 @@ class Call {
   /// Starts the livestreaming of the call.
   Future<Result<CallMetadata>> goLive({
     bool? startHls,
+    bool? startRtmpBroadcasts,
     bool? startRecording,
     bool? startTranscription,
+    bool? startClosedCaption,
+    String? transcriptionStorageName,
   }) async {
     final result = await _coordinatorClient.goLive(
       callCid: callCid,
       startHls: startHls,
+      startRtmpBroadcasts: startRtmpBroadcasts,
       startRecording: startRecording,
       startTranscription: startTranscription,
+      startClosedCaption: startClosedCaption,
+      transcriptionStorageName: transcriptionStorageName,
     );
 
     if (result.isSuccess) {

@@ -13,12 +13,12 @@ import 'stream_video_push_params.dart';
 part 'stream_video_push_provider.dart';
 
 const _idToken = 1;
-const _idCallKitIncoming = 2;
+const _idCallKit = 2;
 const _idCallEnded = 3;
 const _idCallAccepted = 4;
-const _idCallKitAcceptDecline = 5;
 const _idCallRejected = 6;
 const _idCallParticipantCount = 7;
+const _idActiveCall = 8;
 
 /// Implementation of [PushNotificationManager] for Stream Video.
 class StreamVideoPushNotificationManager implements PushNotificationManager {
@@ -72,6 +72,20 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
 
     SharedPreferences.getInstance().then((prefs) => _sharedPreferences = prefs);
 
+    _subscriptions.add(
+      _idActiveCall,
+      streamVideo.state.activeCall.listen((call) async {
+        _logger.d(() => '[activeCall] Active call changed to ${call?.callCid}');
+        if (activeCall != null && activeCall!.callCid != call?.callCid) {
+          _logger.d(() =>
+              '[activeCall] Stopping previous call: ${activeCall!.callCid}');
+          await endCallByCid(activeCall!.callCid.value);
+        }
+
+        activeCall = call;
+      }),
+    );
+
     subscribeToEvents() {
       _subscriptions.add(
         _idCallEnded,
@@ -88,9 +102,11 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
         _idCallParticipantCount,
         client.events.on<CoordinatorCallSessionParticipantCountUpdatedEvent>(
           (event) async {
-            final totalCount = event.participantsCountByRole.values
-                .map((v) => v)
-                .reduce((a, b) => a + b);
+            final roleCounts =
+                event.participantsCountByRole.values.map((v) => v);
+
+            final totalCount =
+                roleCounts.isEmpty ? 0 : roleCounts.reduce((a, b) => a + b);
 
             _logger.d(() =>
                 '[subscribeToEvents] Participant count updated event: ${event.callCid}, count: $totalCount');
@@ -127,7 +143,7 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
                 '[subscribeToEvents] Call accepted event: ${event.callCid}, accepted by: ${event.acceptedByUserId}');
             if (event.acceptedByUserId != streamVideo.currentUser.id) return;
 
-            // end CallKit call on other devices if the call was accepted on one of them
+            // End the CallKit call on this device if the call was accepted on another device
             if (streamVideo.activeCall?.state.value.status
                 is! CallStatusActive) {
               _logger.v(() =>
@@ -135,8 +151,8 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
               await endCallByCid(event.callCid.toString());
             }
 
-            // if the call was accepted on the same device, end the CallKit call silently
-            // (in case it was accepted from the app and not from the CallKit UI)
+            // If the call was accepted on this device, end the CallKit call silently
+            // (useful if the call was accepted via the app instead of the CallKit UI)
             else {
               _logger.v(() =>
                   '[subscribeToEvents] Call accepted on the same device, ending CallKit silently: ${event.callCid}');
@@ -158,29 +174,24 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
     });
 
     _subscriptions.add(
-      _idCallKitIncoming,
-      onCallEvent.whereType<ActionCallIncoming>().listen(
-        (_) {
-          if (!client.isConnected) {
-            client.openConnection();
-          }
-
-          subscribeToEvents();
-        },
-      ),
-    );
-
-    _subscriptions.add(
-      _idCallKitAcceptDecline,
-      onCallEvent.whereType<ActionCallAccept>().map((_) => null).mergeWith([
-        onCallEvent.whereType<ActionCallDecline>().map((_) => null),
-        onCallEvent.whereType<ActionCallTimeout>().map((_) => null),
-      ]).listen(
+      _idCallKit,
+      onCallEvent.listen(
         (event) {
-          _subscriptions.cancel(_idCallAccepted);
-          _subscriptions.cancel(_idCallEnded);
-          _subscriptions.cancel(_idCallRejected);
-          _subscriptions.cancel(_idCallParticipantCount);
+          if (event is ActionCallIncoming) {
+            if (!client.isConnected) {
+              client.openConnection();
+            }
+
+            subscribeToEvents();
+          } else if (event is ActionCallAccept ||
+              event is ActionCallDecline ||
+              event is ActionCallTimeout ||
+              event is ActionCallEnded) {
+            _subscriptions.cancel(_idCallAccepted);
+            _subscriptions.cancel(_idCallEnded);
+            _subscriptions.cancel(_idCallRejected);
+            _subscriptions.cancel(_idCallParticipantCount);
+          }
         },
       ),
     );
@@ -197,6 +208,8 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
   final _logger = taggedLogger(tag: 'SV:PNManager');
 
   final Subscriptions _subscriptions = Subscriptions();
+
+  Call? activeCall;
 
   @override
   void registerDevice() {
@@ -375,13 +388,22 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
   @override
   Future<void> endCall(String uuid) => FlutterCallkitIncoming.endCall(uuid);
 
+  @override
   Future<void> endCallByCid(String cid) async {
     final activeCalls = await this.activeCalls();
-    final calls =
-        activeCalls.where((call) => call.callCid == cid && call.uuid != null);
+    final calls = activeCalls
+        .where((call) => call.callCid == cid && call.uuid != null)
+        .toList();
 
-    for (final call in calls) {
-      await endCall(call.uuid!);
+    // This is a workaround for the issue in flutter_callkit_incoming
+    // where second CallKit call overrids data in showCallkitIncoming native method
+    // and it's not possible to end the call by callCid
+    if (activeCalls.length == calls.length) {
+      await endAllCalls();
+    } else {
+      for (final call in calls) {
+        await endCall(call.uuid!);
+      }
     }
   }
 
