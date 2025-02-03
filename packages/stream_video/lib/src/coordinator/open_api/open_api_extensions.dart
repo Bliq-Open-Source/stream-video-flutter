@@ -304,7 +304,7 @@ extension on open.HLSSettingsResponse {
 extension on open.RTMPSettingsResponse {
   StreamRtmpSettings toSettingsDomain() {
     return StreamRtmpSettings(
-      quality: quality,
+      quality: RTMPSettingsQuality.fromString(quality),
       enabled: enabled,
     );
   }
@@ -466,6 +466,7 @@ extension DeviceExt on open.DeviceResponse {
       pushToken: id,
       pushProvider: parsedProvider,
       pushProviderName: pushProviderName,
+      userId: userId,
       voip: voip,
       createdAt: createdAt,
       disabled: disabled,

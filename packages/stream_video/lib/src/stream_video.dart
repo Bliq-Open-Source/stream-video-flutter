@@ -55,7 +55,6 @@ const _tag = 'SV:Client';
 
 const _idEvents = 1;
 const _idAppState = 2;
-const _idActiveCall = 4;
 
 const _defaultCoordinatorRpcUrl = 'https://video.stream-io-api.com';
 const _defaultCoordinatorWsUrl = 'wss://video.stream-io-api.com/video/connect';
@@ -137,6 +136,7 @@ class StreamVideo extends Disposable {
   })  : _options = options,
         _state = MutableClientState(user) {
     _client = buildCoordinatorClient(
+      user: user,
       apiKey: apiKey,
       tokenManager: _tokenManager,
       latencySettings: _options.latencySettings,
@@ -270,10 +270,12 @@ class StreamVideo extends Disposable {
         'Cannot connect anonymous user to the WS due to Missing Permissions',
       );
     }
+
     _connectOperation ??= _connect(
       includeUserDetails: includeUserDetails,
       registerPushDevice: registerPushDevice,
     ).asCancelable();
+
     return _connectOperation!
         .valueOrDefault(Result.error('connect was cancelled'))
         .whenComplete(() {
@@ -298,6 +300,7 @@ class StreamVideo extends Disposable {
     bool registerPushDevice = true,
   }) async {
     _logger.i(() => '[connect] currentUser.id: ${_state.currentUser.id}');
+
     if (_connectionState.isConnected) {
       _logger.w(() => '[connect] rejected (already connected)');
       final token = _tokenManager.getCachedToken();
@@ -306,9 +309,11 @@ class StreamVideo extends Disposable {
       }
       return Result.success(token);
     }
+
     _connectionState = ConnectionState.connecting(
       _state.currentUser.id,
     );
+
     // guest user will be updated when token gets fetched
     final tokenResult = await _tokenManager.getToken();
     if (tokenResult is! Success<UserToken>) {
@@ -319,6 +324,7 @@ class StreamVideo extends Disposable {
       );
       return tokenResult;
     }
+
     final user = _state.user.value;
     _logger.v(() => '[connect] currentUser.id : ${user.id}');
     try {
@@ -344,13 +350,6 @@ class StreamVideo extends Disposable {
       // Register device with push notification manager.
       if (registerPushDevice) {
         pushNotificationManager?.registerDevice();
-      }
-
-      if (pushNotificationManager != null) {
-        _subscriptions.add(
-          _idActiveCall,
-          _state.activeCall.listen(_onActiveCall),
-        );
       }
 
       return Result.success(tokenResult.data);
@@ -469,12 +468,6 @@ class StreamVideo extends Disposable {
       }
     } catch (e) {
       _logger.e(() => '[onAppState] failed: $e');
-    }
-  }
-
-  Future<void> _onActiveCall(Call? activeCall) async {
-    if (activeCall == null) {
-      await pushNotificationManager?.endAllCalls();
     }
   }
 
@@ -669,14 +662,22 @@ class StreamVideo extends Disposable {
   }
 
   Future<void> _onCallEnded(ActionCallEnded event) async {
+    _logger.d(() => '[onCallEnded] event: $event');
+
     final uuid = event.data.uuid;
     final cid = event.data.callCid;
     if (uuid == null || cid == null) return;
 
     final activeCall = this.activeCall;
+    final incomingCall = _state.incomingCall.valueOrNull;
 
-    // If there is no active call, reject the incoming call.
-    if (activeCall == null) {
+    if (activeCall?.callCid.value == cid) {
+      final result = await activeCall?.leave();
+
+      if (result is Failure) {
+        _logger.d(() => '[onCallEnded] error leaving call: ${result.error}');
+      }
+    } else if (incomingCall?.callCid.value == cid) {
       final callResult = await consumeIncomingCall(uuid: uuid, cid: cid);
       final callToReject = callResult.getDataOrNull();
       if (callToReject == null) return;
@@ -686,28 +687,37 @@ class StreamVideo extends Disposable {
       );
 
       if (result is Failure) {
-        _logger.d(() => '[onCallEnded] error leaving call: ${result.error}');
-      }
-    } else if (activeCall.callCid.value == cid) {
-      final result = await activeCall.leave();
-
-      if (result is Failure) {
-        _logger.d(() => '[onCallEnded] error leaving call: ${result.error}');
+        _logger.d(
+          () => '[onCallEnded] error rejecting incoming call: ${result.error}',
+        );
       }
     }
   }
 
-  /// Handle incoming VoIP push notifications.
-  ///
-  /// Returns `true` if the notification was handled, `false` otherwise.
+  @Deprecated('Use handleRingingFlowNotifications instead.')
   Future<bool> handleVoipPushNotification(
     Map<String, dynamic> payload, {
     bool handleMissedCall = true,
+  }) {
+    return handleRingingFlowNotifications(
+      payload,
+      handleMissedCall: handleMissedCall,
+    );
+  }
+
+  /// This method is used to handle incoming call notifications.
+  /// It will show an incoming call notification if the call is ringing.
+  /// It will show a missed call notification if the call is missed.
+  ///
+  /// Returns `true` if the notification was handled, `false` otherwise.
+  Future<bool> handleRingingFlowNotifications(
+    Map<String, dynamic> payload, {
+    bool handleMissedCall = true,
   }) async {
-    _logger.d(() => '[handleVoipPushNotification] payload: $payload');
+    _logger.d(() => '[handleRingingFlowNotifications] payload: $payload');
     final manager = pushNotificationManager;
     if (manager == null) {
-      _logger.e(() => '[handleVoipPushNotification] rejected (no manager)');
+      _logger.e(() => '[handleRingingFlowNotifications] rejected (no manager)');
       return false;
     }
 
@@ -857,6 +867,7 @@ class StreamVideo extends Disposable {
 }
 
 CoordinatorClient buildCoordinatorClient({
+  required User user,
   required String rpcUrl,
   required String wsUrl,
   required String apiKey,
@@ -876,6 +887,7 @@ CoordinatorClient buildCoordinatorClient({
       retryPolicy: retryPolicy,
       rpcUrl: rpcUrl,
       wsUrl: wsUrl,
+      isAnonymous: user.type == UserType.anonymous,
     ),
   );
 }

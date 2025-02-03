@@ -58,7 +58,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<bool> _handleRemoteMessage(RemoteMessage message) async {
   final streamVideo = locator.get<StreamVideo>();
-  return streamVideo.handleVoipPushNotification(message.data);
+  return streamVideo.handleRingingFlowNotifications(message.data);
 }
 
 class StreamDogFoodingAppContent extends StatefulWidget {
@@ -80,7 +80,20 @@ class _StreamDogFoodingAppContentState
   @override
   void initState() {
     super.initState();
-    initPushNotificationManagerIfAvailable();
+
+    if (_userAuthController.currentUser != null) {
+      initPushNotificationManagerIfAvailable();
+    }
+
+    _userAuthController.addListener(() {
+      if (_userAuthController.currentUser != null) {
+        _compositeSubscription.clear();
+        initPushNotificationManagerIfAvailable();
+      } else {
+        _compositeSubscription.clear();
+      }
+    });
+
     _tryConsumingIncomingCallFromTerminatedState();
   }
 
