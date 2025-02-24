@@ -2,12 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:battery_plus/battery_plus.dart';
-import 'package:thermal/thermal.dart';
 
 import '../../../protobuf/video/sfu/signal_rpc/signal.pb.dart' as sfu;
 import '../../protobuf/video/sfu/models/models.pb.dart' as sfu_models;
 import '../../version.g.dart';
-import '../extensions/thermal_status_ext.dart';
 import '../models/models.dart';
 import '../platform_detector/platform_detector.dart';
 import '../sfu/data/models/sfu_error.dart';
@@ -21,15 +19,6 @@ class SfuStatsReporter {
     required this.callSession,
     required this.stateManager,
   }) {
-    final thermalStatusAvailable =
-        CurrentPlatform.isAndroid || CurrentPlatform.isIos;
-    if (thermalStatusAvailable) {
-      _thermalStatusSubscription =
-          Thermal().onThermalStatusChanged.listen((ThermalStatus status) {
-        _thermalStatus = status;
-      });
-    }
-
     _mediaDeviceSubscription =
         RtcMediaDeviceNotifier.instance.onDeviceChange.listen(
       (devices) {
@@ -50,11 +39,9 @@ class SfuStatsReporter {
   final CallStateNotifier stateManager;
 
   StreamSubscription<List<RtcMediaDevice>>? _mediaDeviceSubscription;
-  StreamSubscription<ThermalStatus>? _thermalStatusSubscription;
 
   List<String>? _availableAudioInputs;
   List<String>? _availableVideoInputs;
-  ThermalStatus? _thermalStatus;
 
   Timer? _timer;
 
@@ -106,12 +93,10 @@ class SfuStatsReporter {
 
     if (CurrentPlatform.isAndroid) {
       androidState = sfu_models.AndroidState(
-        thermalState: _thermalStatus?.toAndroidThermalState(),
         isPowerSaverMode: lowPowerMode,
       );
     } else if (CurrentPlatform.isIos) {
       appleState = sfu_models.AppleState(
-        thermalState: _thermalStatus?.toAppleThermalState(),
         isLowPowerModeEnabled: lowPowerMode,
       );
     }
@@ -164,6 +149,5 @@ class SfuStatsReporter {
   void stop() {
     _timer?.cancel();
     _mediaDeviceSubscription?.cancel();
-    _thermalStatusSubscription?.cancel();
   }
 }
