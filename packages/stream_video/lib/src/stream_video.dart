@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:async/async.dart' as async;
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:uuid/uuid.dart';
 
+import '../globals.dart';
 import '../open_api/video/coordinator/api.dart';
 import 'call/call.dart';
 import 'call/call_reject_reason.dart';
@@ -39,6 +42,7 @@ import 'models/push_provider.dart';
 import 'models/queried_calls.dart';
 import 'models/user.dart';
 import 'models/user_info.dart';
+import 'platform_detector/platform_detector.dart';
 import 'push_notification/push_notification_manager.dart';
 import 'retry/retry_policy.dart';
 import 'token/token.dart';
@@ -150,6 +154,7 @@ class StreamVideo extends Disposable {
         pushNotificationManagerProvider?.call(_client, this);
 
     _state.user.value = user;
+
     final tokenProvider = switch (user.type) {
       UserType.authenticated => TokenProvider.from(
           userToken?.let(UserToken.jwt),
@@ -183,6 +188,7 @@ class StreamVideo extends Disposable {
     );
 
     _setupLogger(options.logPriority, options.logHandlerFunction);
+    unawaited(_setClientVersionDetails());
 
     if (options.autoConnect) {
       unawaited(
@@ -219,6 +225,9 @@ class StreamVideo extends Disposable {
 
   final StreamVideoOptions _options;
   final MutableClientState _state;
+
+  bool get muteVideoWhenInBackground => _options.muteVideoWhenInBackground;
+  bool get muteAudioWhenInBackground => _options.muteAudioWhenInBackground;
 
   final _tokenManager = TokenManager();
   final _subscriptions = Subscriptions();
@@ -428,30 +437,33 @@ class StreamVideo extends Disposable {
     try {
       final activeCallCid = _state.activeCall.valueOrNull?.callCid;
 
-      if (state.isPaused &&
-          activeCallCid == null &&
-          !_options.keepConnectionsAliveWhenInBackground) {
-        _logger.i(() => '[onAppState] close connection');
-        _subscriptions.cancel(_idEvents);
-        await _client.closeConnection();
-      } else if (state.isPaused && activeCallCid != null) {
-        final callState = activeCall?.state.value;
-        final isVideoEnabled =
-            callState?.localParticipant?.isVideoEnabled ?? false;
-        final isAudioEnabled =
-            callState?.localParticipant?.isAudioEnabled ?? false;
+      if (state.isPaused) {
+        // Handle app paused state
+        if (activeCallCid == null &&
+            !_options.keepConnectionsAliveWhenInBackground) {
+          _logger.i(() => '[onAppState] close connection');
+          _subscriptions.cancel(_idEvents);
+          await _client.closeConnection();
+        } else if (activeCallCid != null) {
+          final callState = activeCall?.state.value;
+          final isVideoEnabled =
+              callState?.localParticipant?.isVideoEnabled ?? false;
+          final isAudioEnabled =
+              callState?.localParticipant?.isAudioEnabled ?? false;
 
-        if (_options.muteVideoWhenInBackground && isVideoEnabled) {
-          await activeCall?.setCameraEnabled(enabled: false);
-          _mutedCameraByStateChange = true;
-          _logger.v(() => 'Muted camera track since app was paused.');
-        }
-        if (_options.muteAudioWhenInBackground && isAudioEnabled) {
-          await activeCall?.setMicrophoneEnabled(enabled: false);
-          _mutedAudioByStateChange = true;
-          _logger.v(() => 'Muted audio track since app was paused.');
+          if (_options.muteVideoWhenInBackground && isVideoEnabled) {
+            await activeCall?.setCameraEnabled(enabled: false);
+            _mutedCameraByStateChange = true;
+            _logger.v(() => 'Muted camera track since app was paused.');
+          }
+          if (_options.muteAudioWhenInBackground && isAudioEnabled) {
+            await activeCall?.setMicrophoneEnabled(enabled: false);
+            _mutedAudioByStateChange = true;
+            _logger.v(() => 'Muted audio track since app was paused.');
+          }
         }
       } else if (state.isResumed) {
+        // Handle app resumed state
         _logger.i(() => '[onAppState] open connection');
         await _client.openConnection();
         _subscriptions.add(_idEvents, _client.events.listen(_onEvent));
@@ -582,13 +594,66 @@ class StreamVideo extends Disposable {
     return manager.on<T>(onEvent);
   }
 
+  StreamSubscription<CallKitEvent>? disposeAfterResolvingRinging({
+    void Function()? disposingCallback,
+  }) {
+    return onCallKitEvent(
+      (event) {
+        if (event is ActionCallAccept ||
+            event is ActionCallDecline ||
+            event is ActionCallTimeout ||
+            event is ActionCallEnded) {
+          disposingCallback?.call();
+          dispose();
+        }
+      },
+    );
+  }
+
+  Future<bool> consumeAndAcceptActiveCall({
+    void Function(Call)? onCallAccepted,
+    CallPreferences? callPreferences,
+  }) async {
+    final calls = await pushNotificationManager?.activeCalls();
+    if (calls == null || calls.isEmpty) return false;
+
+    final callResult = await consumeIncomingCall(
+      uuid: calls.first.uuid!,
+      cid: calls.first.callCid!,
+      preferences: callPreferences,
+    );
+
+    callResult.fold(
+      success: (result) async {
+        final call = result.data;
+        await call.accept();
+
+        onCallAccepted?.call(call);
+
+        return true;
+      },
+      failure: (error) {
+        _logger.d(
+          () =>
+              '[consumeAndAcceptActiveCall] error consuming incoming call: $error',
+        );
+        return false;
+      },
+    );
+
+    return false;
+  }
+
   CompositeSubscription observeCoreCallKitEvents({
     void Function(Call)? onCallAccepted,
+    CallPreferences? acceptCallPreferences,
   }) {
     final callKitEventSubscriptions = CompositeSubscription();
 
-    observeCallAcceptCallKitEvent(onCallAccepted: onCallAccepted)
-        ?.addTo(callKitEventSubscriptions);
+    observeCallAcceptCallKitEvent(
+      onCallAccepted: onCallAccepted,
+      acceptCallPreferences: acceptCallPreferences,
+    )?.addTo(callKitEventSubscriptions);
 
     observeCallDeclinedCallKitEvent()?.addTo(callKitEventSubscriptions);
     observeCallEndedCallKitEvent()?.addTo(callKitEventSubscriptions);
@@ -598,11 +663,13 @@ class StreamVideo extends Disposable {
 
   StreamSubscription<ActionCallAccept>? observeCallAcceptCallKitEvent({
     void Function(Call)? onCallAccepted,
+    CallPreferences? acceptCallPreferences,
   }) {
     return onCallKitEvent<ActionCallAccept>(
       (event) => _onCallAccept(
         event,
         onCallAccepted: onCallAccepted,
+        callPreferences: acceptCallPreferences,
       ),
     );
   }
@@ -618,6 +685,7 @@ class StreamVideo extends Disposable {
   Future<void> _onCallAccept(
     ActionCallAccept event, {
     void Function(Call)? onCallAccepted,
+    CallPreferences? callPreferences,
   }) async {
     _logger.d(() => '[onCallAccept] event: $event');
 
@@ -625,7 +693,11 @@ class StreamVideo extends Disposable {
     final cid = event.data.callCid;
     if (uuid == null || cid == null) return;
 
-    final call = await consumeIncomingCall(uuid: uuid, cid: cid);
+    final call = await consumeIncomingCall(
+      uuid: uuid,
+      cid: cid,
+      preferences: callPreferences,
+    );
     final callToJoin = call.getDataOrNull();
     if (callToJoin == null) return;
 
@@ -661,7 +733,13 @@ class StreamVideo extends Disposable {
     }
   }
 
+  /// ActionCallEnded event is sent by `flutter_callkit_incoming` when the call is ended.
+  /// On iOS this is connected to CallKit and should end active call or reject incoming call.
+  /// On Android this is connected to push notification being dismissed.
+  /// When app is terminated it can be send even when accepting the call. That's why we only handle it on iOS.
   Future<void> _onCallEnded(ActionCallEnded event) async {
+    if (CurrentPlatform.isAndroid) return;
+
     _logger.d(() => '[onCallEnded] event: $event');
 
     final uuid = event.data.uuid;
@@ -835,6 +913,7 @@ class StreamVideo extends Disposable {
   Future<Result<Call>> consumeIncomingCall({
     required String uuid,
     required String cid,
+    CallPreferences? preferences,
   }) async {
     _logger.d(() => '[consumeIncomingCall] uuid: $uuid, cid: $cid');
     final manager = pushNotificationManager;
@@ -860,6 +939,7 @@ class StreamVideo extends Disposable {
         ringing: true,
         metadata: callResult.data.metadata,
       ),
+      preferences: preferences,
     );
 
     return Result.success(call);
@@ -899,6 +979,46 @@ void _setupLogger(Priority logPriority, LogHandlerFunction logHandlerFunction) {
       const ConsoleStreamLogger(),
       ExternalStreamLogger(logHandlerFunction),
     ]);
+  }
+}
+
+Future<String?> _setClientVersionDetails() async {
+  try {
+    final packageInfo = await PackageInfo.fromPlatform();
+
+    final appName = packageInfo.appName;
+    final appVersion = packageInfo.version;
+
+    var osVersion = '';
+    var deviceModel = '';
+
+    if (CurrentPlatform.isAndroid) {
+      final deviceInfo = await DeviceInfoPlugin().androidInfo;
+      osVersion = deviceInfo.version.release;
+      deviceModel = '${deviceInfo.manufacturer} ${deviceInfo.model}';
+    } else if (CurrentPlatform.isIos) {
+      final deviceInfo = await DeviceInfoPlugin().iosInfo;
+      osVersion = deviceInfo.systemVersion;
+      deviceModel = deviceInfo.utsname.machine;
+    } else if (CurrentPlatform.isMacOS) {
+      final deviceInfo = await DeviceInfoPlugin().macOsInfo;
+      osVersion =
+          '${deviceInfo.majorVersion}.${deviceInfo.minorVersion}.${deviceInfo.patchVersion}';
+      deviceModel = deviceInfo.model;
+    } else if (CurrentPlatform.isWindows) {
+      final deviceInfo = await DeviceInfoPlugin().windowsInfo;
+      osVersion =
+          '${deviceInfo.majorVersion}.${deviceInfo.minorVersion}.${deviceInfo.buildNumber}';
+    } else if (CurrentPlatform.isLinux) {
+      final deviceInfo = await DeviceInfoPlugin().linuxInfo;
+      osVersion = '${deviceInfo.name} ${deviceInfo.version}';
+    }
+
+    return clientVersionDetails ??=
+        'app=$appName|app_version=$appVersion|os=${CurrentPlatform.name} $osVersion${deviceModel.isNotEmpty ? '|device_model=$deviceModel' : ''}';
+  } catch (e) {
+    streamLog.e(_tag, () => '[_setupComposeVersion] failed: $e');
+    return null;
   }
 }
 
