@@ -9,9 +9,11 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stream_chat_flutter/stream_chat_flutter.dart' hide User;
 import 'package:stream_video_flutter/stream_video_flutter.dart';
+import 'package:stream_video_noise_cancellation/noise_cancellation_audio_processor.dart';
 import 'package:stream_video_push_notification/stream_video_push_notification.dart';
 
 import '../app/user_auth_controller.dart';
+import '../core/model/environment.dart';
 import '../core/repos/custom_environment_loader.dart';
 import '../core/repos/token_service.dart';
 import '../core/repos/user_auth_repository.dart';
@@ -44,7 +46,7 @@ class AppInjector {
 
     // Repositories
     locator.registerSingleton(
-      TokenService(
+      const TokenService(
         customEnvironmentLoader: customEnvironmentLoader,
       ),
     );
@@ -159,11 +161,12 @@ StreamVideo _initStreamVideo(
     apiKey,
     user: user,
     tokenLoader: tokenLoader,
-    options: const StreamVideoOptions(
-      logPriority: Priority.verbose,
+    options: StreamVideoOptions(
+      logPriority: Priority.debug,
       muteAudioWhenInBackground: false,
       muteVideoWhenInBackground: false,
       keepConnectionsAliveWhenInBackground: true,
+      audioProcessor: NoiseCancellationAudioProcessor(),
     ),
     pushNotificationManagerProvider: StreamVideoPushNotificationManager.create(
       iosPushProvider: const StreamVideoPushProvider.apn(

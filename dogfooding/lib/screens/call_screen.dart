@@ -1,4 +1,5 @@
 // 🎯 Dart imports:
+import 'dart:async';
 import 'dart:convert';
 
 // 🐦 Flutter imports:
@@ -12,7 +13,7 @@ import 'package:flutter_dogfooding/theme/app_palette.dart';
 import 'package:flutter_dogfooding/utils/feedback_dialog.dart';
 import 'package:flutter_dogfooding/widgets/badged_call_option.dart';
 import 'package:flutter_dogfooding/widgets/call_duration_title.dart';
-import 'package:flutter_dogfooding/widgets/settings_menu.dart';
+import 'package:flutter_dogfooding/widgets/settings_menu/settings_menu.dart';
 import 'package:flutter_dogfooding/widgets/share_call_card.dart';
 import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 import 'package:stream_video_flutter/stream_video_flutter.dart' hide User;
@@ -88,30 +89,6 @@ class _CallScreenState extends State<CallScreen> {
     if (mounted) setState(() {});
   }
 
-  void showChat(BuildContext context) {
-    showModalBottomSheet<dynamic>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(16),
-        ),
-      ),
-      builder: (_) {
-        final size = MediaQuery.sizeOf(context);
-        final viewInsets = MediaQuery.viewInsetsOf(context);
-
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          height: size.height * 0.6 + viewInsets.bottom,
-          padding: EdgeInsets.only(bottom: viewInsets.bottom),
-          child: ChatBottomSheet(channel: _channel!),
-        );
-      },
-    );
-  }
-
   void showParticipants(BuildContext context) {
     CallParticipantsRoute($extra: widget.call).push(context);
   }
@@ -140,6 +117,17 @@ class _CallScreenState extends State<CallScreen> {
           callConnectOptions: widget.connectOptions,
           onCancelCallTap: () async {
             await widget.call.reject(reason: CallRejectReason.cancel());
+          },
+          onCallDisconnected: (disconnectedProperties) {
+            final reason = disconnectedProperties.reason;
+
+            Navigator.of(context).pop();
+
+            if (reason is DisconnectReasonCancelled ||
+                reason is DisconnectReasonEnded ||
+                reason is DisconnectReasonLastParticipantLeft) {
+              showFeedbackDialog(context, call: widget.call);
+            }
           },
           callContentBuilder: (
             BuildContext context,
@@ -202,7 +190,7 @@ class _CallScreenState extends State<CallScreen> {
                         bottom: 0,
                         left: 0,
                         right: 0,
-                        child: ShareCallCard(callId: call.id),
+                        child: ShareCallWelcomeCard(callId: call.id),
                       )
                   ],
                 );
@@ -211,10 +199,6 @@ class _CallScreenState extends State<CallScreen> {
                 return CallAppBar(
                   call: call,
                   leadingWidth: 120,
-                  onLeaveCallTap: () {
-                    call.leave();
-                    showFeedbackDialog(context, call: call);
-                  },
                   leading: Row(
                     children: [
                       ToggleLayoutOption(
@@ -292,15 +276,7 @@ class _CallScreenState extends State<CallScreen> {
                         ),
                         badgeCount: callState.callParticipants.length,
                       ),
-                      BadgedCallOption(
-                        callControlOption: CallControlOption(
-                          icon: const Icon(Icons.question_answer),
-                          onPressed: _channel != null //
-                              ? () => showChat(context)
-                              : null,
-                        ),
-                        badgeCount: _channel?.state?.unreadCount ?? 0,
-                      )
+                      _ShowChatButton(channel: _channel),
                     ]),
                   ),
                 );
@@ -309,6 +285,83 @@ class _CallScreenState extends State<CallScreen> {
           },
         ),
       ),
+    );
+  }
+}
+
+class _ShowChatButton extends StatefulWidget {
+  const _ShowChatButton({required this.channel});
+  final Channel? channel;
+
+  @override
+  State<_ShowChatButton> createState() => __ShowChatButtonState();
+}
+
+class __ShowChatButtonState extends State<_ShowChatButton> {
+  StreamSubscription<int>? _unreadCountSubscription;
+  int _unreadCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenToUnreadCount();
+  }
+
+  void _listenToUnreadCount() {
+    _unreadCountSubscription = widget.channel?.state?.unreadCountStream.listen(
+      (count) => setState(() => _unreadCount = count),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _ShowChatButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.channel?.state != oldWidget.channel?.state) {
+      _unreadCountSubscription?.cancel();
+      _listenToUnreadCount();
+    }
+  }
+
+  @override
+  void dispose() {
+    _unreadCountSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BadgedCallOption(
+      callControlOption: CallControlOption(
+        icon: const Icon(Icons.question_answer),
+        onPressed: widget.channel != null //
+            ? () => showChat(context)
+            : null,
+      ),
+      badgeCount: _unreadCount == 0 ? null : _unreadCount,
+    );
+  }
+
+  void showChat(BuildContext context) {
+    showModalBottomSheet<dynamic>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(16),
+        ),
+      ),
+      builder: (_) {
+        final size = MediaQuery.sizeOf(context);
+        final viewInsets = MediaQuery.viewInsetsOf(context);
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          height: size.height * 0.6 + viewInsets.bottom,
+          padding: EdgeInsets.only(bottom: viewInsets.bottom),
+          child: ChatBottomSheet(channel: widget.channel!),
+        );
+      },
     );
   }
 }

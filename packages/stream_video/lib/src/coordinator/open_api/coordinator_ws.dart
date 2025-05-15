@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
+
 import '../../../globals.dart';
 import '../../../open_api/video/coordinator/api.dart' as open;
 import '../../core/video_error.dart';
@@ -42,6 +44,7 @@ class CoordinatorWebSocket extends StreamWebSocket
     required this.userInfo,
     required this.tokenManager,
     required this.retryPolicy,
+    required this.networkMonitor,
     this.includeUserDetails = false,
   }) : super(
           _buildUrl(url, apiKey),
@@ -51,7 +54,11 @@ class CoordinatorWebSocket extends StreamWebSocket
 
   late final _logger = taggedLogger(tag: '$_tag-$_seq');
 
-  late final HealthMonitor healthMonitor = HealthMonitorImpl('Coord', this);
+  late final HealthMonitor healthMonitor = HealthMonitorImpl(
+    'Coord',
+    this,
+    networkMonitor: networkMonitor,
+  );
 
   /// The API key used to authenticate the user.
   final String apiKey;
@@ -64,6 +71,8 @@ class CoordinatorWebSocket extends StreamWebSocket
 
   /// The retry policy is used for reconnection flow.
   final RetryPolicy retryPolicy;
+
+  final InternetConnection networkMonitor;
 
   /// Decides whether to pass user details to backend when connecting the user.
   final bool includeUserDetails;
@@ -190,7 +199,7 @@ class CoordinatorWebSocket extends StreamWebSocket
 
   @override
   void onMessage(dynamic message) {
-    _logger.i(() => '[onRawMessage] message: $message');
+    _logger.v(() => '[onRawMessage] message: $message');
     OpenApiError? dtoError;
     OpenApiEvent? dtoEvent;
     try {
@@ -251,7 +260,7 @@ class CoordinatorWebSocket extends StreamWebSocket
   }
 
   void sendPing() {
-    _logger.d(() => '[sendPing] no args');
+    _logger.v(() => '[sendPing] no args');
     final healthCheck = [
       {
         'type': 'health.check',
@@ -269,7 +278,7 @@ class CoordinatorWebSocket extends StreamWebSocket
 
   @override
   void send(dynamic message) {
-    _logger.d(() => '[send] message: $message');
+    _logger.v(() => '[send] message: $message');
     super.send(message);
   }
 

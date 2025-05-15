@@ -174,13 +174,9 @@ abstract class CoordinatorClient {
   /// Stops transcription for the call described by the given [callCid].
   Future<Result<None>> stopTranscription(StreamCallCid callCid);
 
-  Future<Result<None>> startClosedCaptions(
-    StreamCallCid callCid,
-  );
+  Future<Result<None>> startClosedCaptions(StreamCallCid callCid);
 
-  Future<Result<None>> stopClosedCaptions(
-    StreamCallCid callCid,
-  );
+  Future<Result<None>> stopClosedCaptions(StreamCallCid callCid);
 
   /// Starts broadcasting for the call described by the given [callCid].
   Future<Result<String?>> startBroadcasting(StreamCallCid callCid);
@@ -236,7 +232,6 @@ abstract class CoordinatorClient {
   Future<Result<CallMetadata>> goLive({
     required StreamCallCid callCid,
     bool? startHls,
-    bool? startRtmpBroadcasts,
     bool? startRecording,
     bool? startTranscription,
     bool? startClosedCaption,
@@ -257,6 +252,7 @@ abstract class CoordinatorClient {
   Future<Result<CallMetadata>> updateCall({
     required StreamCallCid callCid,
     Map<String, Object> custom = const {},
+    DateTime? startsAt,
     StreamRingSettings? ring,
     StreamAudioSettings? audio,
     StreamVideoSettings? video,
@@ -266,6 +262,9 @@ abstract class CoordinatorClient {
     StreamBackstageSettings? backstage,
     StreamGeofencingSettings? geofencing,
     StreamLimitsSettings? limits,
+    StreamBroadcastingSettings? broadcasting,
+    StreamSessionSettings? session,
+    StreamFrameRecordingSettings? frameRecording,
   });
 
   Future<Result<GuestCreatedData>> loadGuest({
