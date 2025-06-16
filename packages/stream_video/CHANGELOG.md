@@ -1,3 +1,34 @@
+## 0.9.6
+
+✅ Added
+* Added `handleCallInterruptionCallbacks` method to `RtcMediaDeviceNotifier` that provides an option to handle system audio interruption like incoming calls, or other media playing. See the [documentation](https://getstream.io/video/docs/flutter/advanced/handling-system-audio-interruptions/) for details.
+
+🐞 Fixed
+* Fixed the handling of user blocking event to disconnect the blocked user with a proper reason.
+
+## 0.9.5
+
+✅ Added
+* Introduced `allowMultipleActiveCalls` option in `StreamVideoOptions` enabling support for concurrent active calls. See the [documentation](https://getstream.io/video/docs/flutter/advanced/multiple-simultaneous-calls-support/) for details.
+
+🐞 Fixed
+* Enhanced permission update handling to only process events targeting the current user.
+* Improved audio output device selection to prioritize external audio devices during call connection.
+
+## 0.9.4
+
+* Sync version with `stream_video_flutter` 0.9.4
+
+## 0.9.3
+
+✅ Added
+* Introduced `callDurationStream` to the `Call` class. A `Stream<Duration>` that emits the current call duration.
+* Added `createdByUser` property to the `CallState` for better tracking of the initiating user.
+
+🐞 Fixed
+* Resolved an issue where participants’ tracks would briefly disappear ("blink") or change location when many participants are in the call.
+* Fixed a bug where subsequent screen sharing sessions did not end properly when terminated via the browser UI.
+
 ## 0.9.2
 
 🐞 Fixed

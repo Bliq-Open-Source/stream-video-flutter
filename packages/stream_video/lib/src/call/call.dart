@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:async/async.dart' show CancelableOperation;
 import 'package:collection/collection.dart';
 import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
 import 'package:meta/meta.dart';
@@ -59,9 +60,9 @@ import 'permissions/permissions_manager.dart';
 import 'session/call_session.dart';
 import 'session/call_session_factory.dart';
 import 'session/dynascale_manager.dart';
-import 'sfu_stats_reporter.dart';
 import 'state/call_state_notifier.dart';
-import 'stats_reporter.dart';
+import 'stats/sfu_stats_reporter.dart';
+import 'stats/stats_reporter.dart';
 
 typedef OnCallPermissionRequest = void Function(
   StreamCallPermissionRequestEvent,
@@ -100,6 +101,7 @@ class Call {
     RetryPolicy? retryPolicy,
     SdpPolicy? sdpPolicy,
     CallPreferences? preferences,
+    RtcMediaDeviceNotifier? rtcMediaDeviceNotifier,
   }) {
     streamLog.i(_tag, () => '<factory> callCid: $callCid');
     return Call._internal(
@@ -110,6 +112,7 @@ class Call {
       retryPolicy: retryPolicy,
       sdpPolicy: sdpPolicy,
       preferences: preferences,
+      rtcMediaDeviceNotifier: rtcMediaDeviceNotifier,
     );
   }
 
@@ -124,6 +127,7 @@ class Call {
     RetryPolicy? retryPolicy,
     SdpPolicy? sdpPolicy,
     CallPreferences? preferences,
+    RtcMediaDeviceNotifier? rtcMediaDeviceNotifier,
   }) {
     streamLog.i(_tag, () => '<factory> created: $data');
     return Call._internal(
@@ -134,6 +138,7 @@ class Call {
       retryPolicy: retryPolicy,
       sdpPolicy: sdpPolicy,
       preferences: preferences,
+      rtcMediaDeviceNotifier: rtcMediaDeviceNotifier,
     ).also(
       (it) => it._stateManager.updateFromCallCreatedData(
         data,
@@ -153,6 +158,7 @@ class Call {
     RetryPolicy? retryPolicy,
     SdpPolicy? sdpPolicy,
     CallPreferences? preferences,
+    RtcMediaDeviceNotifier? rtcMediaDeviceNotifier,
   }) {
     streamLog.i(_tag, () => '<factory> created: $data');
     return Call._internal(
@@ -163,6 +169,7 @@ class Call {
       retryPolicy: retryPolicy,
       sdpPolicy: sdpPolicy,
       preferences: preferences,
+      rtcMediaDeviceNotifier: rtcMediaDeviceNotifier,
     ).also((it) => it._stateManager.lifecycleCallRinging(data));
   }
 
@@ -175,6 +182,7 @@ class Call {
     SdpPolicy? sdpPolicy,
     CallPreferences? preferences,
     CallCredentials? credentials,
+    RtcMediaDeviceNotifier? rtcMediaDeviceNotifier,
   }) {
     final finalCallPreferences = preferences ?? DefaultCallPreferences();
     final finalRetryPolicy = retryPolicy ?? const RetryPolicy();
@@ -203,6 +211,8 @@ class Call {
       retryPolicy: finalRetryPolicy,
       sdpPolicy: finalSdpPolicy,
       permissionManager: permissionManager,
+      rtcMediaDeviceNotifier:
+          rtcMediaDeviceNotifier ?? RtcMediaDeviceNotifier.instance,
     );
   }
 
@@ -214,6 +224,7 @@ class Call {
     required this.networkMonitor,
     required RetryPolicy retryPolicy,
     required SdpPolicy sdpPolicy,
+    required RtcMediaDeviceNotifier rtcMediaDeviceNotifier,
     CallCredentials? credentials,
   })  : _sessionFactory = CallSessionFactory(
           callCid: stateManager.callState.callCid,
@@ -227,6 +238,7 @@ class Call {
         _streamVideo = streamVideo,
         _retryPolicy = retryPolicy,
         _credentials = credentials,
+        _rtcMediaDeviceNotifier = rtcMediaDeviceNotifier,
         dynascaleManager = DynascaleManager(stateManager: stateManager) {
     streamLog.i(_tag, () => '<init> state: ${stateManager.callState}');
 
@@ -251,13 +263,15 @@ class Call {
   final PermissionsManager _permissionsManager;
   final DynascaleManager dynascaleManager;
   final InternetConnection networkMonitor;
+  final RtcMediaDeviceNotifier _rtcMediaDeviceNotifier;
 
   CallCredentials? _credentials;
   CallSession? _session;
   CallSession? _previousSession;
 
-  int? _statsReportingIntervalMs;
+  StatsOptions? _sfuStatsOptions;
   SfuStatsReporter? _sfuStatsReporter;
+  String? _unifiedSessionId;
 
   int _reconnectAttempts = 0;
   Duration _fastReconnectDeadline = Duration.zero;
@@ -269,14 +283,16 @@ class Call {
 
   final List<Timer> _reactionTimers = [];
   final Map<String, Timer> _captionsTimers = {};
+  final List<CancelableOperation<void>> _sfuStatsTimers = [];
 
   String get id => state.value.callId;
   StreamCallCid get callCid => state.value.callCid;
   StreamCallType get type => state.value.callType;
-  bool get isActiveCall =>
-      _streamVideo.state.activeCall.valueOrNull?.callCid == callCid;
+  bool get isActiveCall => _streamVideo.state.activeCalls.value
+      .any((call) => call.callCid == callCid);
 
   StateEmitter<CallState> get state => _stateManager.callStateStream;
+  Stream<Duration> get callDurationStream => _stateManager.durationStream;
 
   SharedEmitter<({CallStats publisherStats, CallStats subscriberStats})>
       get stats => _stats;
@@ -490,7 +506,12 @@ class Call {
       case StreamCallMemberRemovedEvent _:
         return _stateManager.coordinatorCallMemberRemoved(event);
       case StreamCallMemberUpdatedEvent _:
-        return _stateManager.coordinatorCallMemberUpdated(event);
+        return _stateManager.coordinatorCallMemberUpdated(event.members);
+      case StreamCallMemberUpdatedPermissionEvent _:
+        return _stateManager.coordinatorCallMemberUpdated(
+          event.updatedMembers,
+          capabilitiesByRole: event.capabilitiesByRole,
+        );
       case StreamCallUserBlockedEvent _:
         return _stateManager.coordinatorCallUserBlocked(event);
       case StreamCallUserUnblockedEvent _:
@@ -532,11 +553,13 @@ class Call {
       await _streamVideo.state.setOutgoingCall(null);
     }
 
-    final activeCall = _streamVideo.state.activeCall.valueOrNull;
-    if (activeCall != null && activeCall.callCid != callCid) {
-      _logger.i(() => '[accept] canceling another active call: $activeCall');
-      await activeCall.leave(reason: DisconnectReason.ended());
-      await _streamVideo.state.setActiveCall(null);
+    if (!_streamVideo.options.allowMultipleActiveCalls) {
+      final activeCall = _streamVideo.activeCall;
+      if (activeCall != null && activeCall.callCid != callCid) {
+        _logger.i(() => '[accept] canceling another active call: $activeCall');
+        await activeCall.leave(reason: DisconnectReason.replaced());
+        await _streamVideo.state.removeActiveCall(activeCall);
+      }
     }
 
     final result = await _coordinatorClient.acceptCall(cid: state.callCid);
@@ -605,7 +628,8 @@ class Call {
       return const Result.success(none);
     }
 
-    if (_streamVideo.state.activeCall.valueOrNull?.callCid == callCid) {
+    if (_streamVideo.state.activeCalls.value
+        .any((call) => call.callCid == callCid)) {
       _logger.w(
         () => '[join] rejected (a call with the same cid is in progress)',
       );
@@ -712,7 +736,10 @@ class Call {
       final reconnectDetails =
           _reconnectStrategy == SfuReconnectionStrategy.unspecified
               ? null
-              : await _previousSession?.getReconnectDetails(_reconnectStrategy);
+              : await _previousSession?.getReconnectDetails(
+                  _reconnectStrategy,
+                  reconnectAttempts: _reconnectAttempts,
+                );
 
       if (!performingFastReconnect) {
         _logger.v(
@@ -724,10 +751,12 @@ class Call {
           // a new session_id is necessary for the REJOIN strategy.
           // we use the previous session_id if available
           sessionId: performingRejoin ? null : _previousSession?.sessionId,
+          sessionSeq: _reconnectAttempts,
           credentials: _credentials!,
           stateManager: _stateManager,
           dynascaleManager: dynascaleManager,
           networkMonitor: networkMonitor,
+          statsOptions: _sfuStatsOptions!,
           onPeerConnectionFailure: (pc) async {
             if (state.value.status is! CallStatusReconnecting) {
               await pc.pc.restartIce().onError((_, __) {
@@ -832,7 +861,7 @@ class Call {
     final prevState = _stateManager.callState;
 
     if (credentials == null ||
-        _statsReportingIntervalMs == null ||
+        _sfuStatsOptions == null ||
         _reconnectStrategy == SfuReconnectionStrategy.rejoin ||
         _reconnectStrategy == SfuReconnectionStrategy.migrate) {
       _logger.d(() => '[joinIfNeeded] joining');
@@ -849,7 +878,13 @@ class Call {
       return joinedResult.fold(
         success: (success) {
           _credentials = success.data.credentials;
-          _statsReportingIntervalMs = success.data.reportingIntervalMs;
+          _sfuStatsOptions = success.data.statsOptions;
+
+          _session?.rtcManager?.subscriber.tracer
+              .setEnabled(_sfuStatsOptions!.enableRtcStats);
+          _session?.rtcManager?.publisher?.tracer
+              .setEnabled(_sfuStatsOptions!.enableRtcStats);
+          _session?.setTraceEnabled(_sfuStatsOptions!.enableRtcStats);
 
           return Result.success(success.data.credentials);
         },
@@ -918,7 +953,7 @@ class Call {
       wasCreated: joinResult.data.wasCreated,
       metadata: joinResult.data.metadata,
       credentials: joinResult.data.credentials,
-      reportingIntervalMs: joinResult.data.reportingIntervalMs,
+      statsOptions: joinResult.data.statsOptions,
     );
 
     _stateManager.lifecycleCallJoined(
@@ -1057,11 +1092,19 @@ class Call {
       );
     }
 
-    if (_statsReportingIntervalMs != null) {
+    if (_sfuStatsOptions != null) {
+      _unifiedSessionId ??= _session?.sessionId;
+      await _sfuStatsReporter?.sendSfuStats();
       _sfuStatsReporter = SfuStatsReporter(
         callSession: session,
         stateManager: _stateManager,
-      )..run(interval: Duration(milliseconds: _statsReportingIntervalMs!));
+        statsOptions: _sfuStatsOptions!,
+        unifiedSessionId: _unifiedSessionId,
+      )..run(
+          interval: Duration(
+            milliseconds: _sfuStatsOptions!.reportingIntervalMs,
+          ),
+        );
     }
 
     return result.fold(
@@ -1098,9 +1141,13 @@ class Call {
         totalCount: sfuEvent.participantCount.total,
         anonymousCount: sfuEvent.participantCount.anonymous,
       );
+    } else if (sfuEvent is SfuCallEndedEvent) {
+      await _sfuStatsReporter?.sendSfuStats();
+      _stateManager.sfuCallEnded(sfuEvent);
     }
 
     if (sfuEvent is SfuSocketDisconnected) {
+      await _sfuStatsReporter?.sendSfuStats();
       if (!StreamWebSocketCloseCode.isIntentionalClosure(
         sfuEvent.reason.closeCode,
       )) {
@@ -1158,10 +1205,6 @@ class Call {
       _awaitNetworkAvailableFuture = _awaitNetworkAvailable();
 
       do {
-        if (strategy != SfuReconnectionStrategy.migrate) {
-          _reconnectAttempts++;
-        }
-
         _stateManager.lifecycleCallConnecting(
           attempt: _reconnectAttempts,
           strategy: strategy,
@@ -1180,6 +1223,8 @@ class Call {
             _stateManager.lifecycleCallReconnectingFailed();
             return;
           }
+
+          await _sfuStatsReporter?.sendSfuStats();
 
           switch (_reconnectStrategy) {
             case SfuReconnectionStrategy.unspecified:
@@ -1227,6 +1272,7 @@ class Call {
   }
 
   Future<void> _reconnectRejoin() async {
+    _reconnectAttempts++;
     _reconnectStrategy = SfuReconnectionStrategy.rejoin;
     await _join();
   }
@@ -1234,6 +1280,7 @@ class Call {
   Future<void> _reconnectMigrate() async {
     final migrateTimeStopwatch = Stopwatch()..start();
 
+    _reconnectAttempts++;
     _reconnectStrategy = SfuReconnectionStrategy.migrate;
     final joinResult = await _join();
 
@@ -1369,8 +1416,15 @@ class Call {
       await stopAudioProcessing();
     }
 
-    for (final timer in [..._reactionTimers, ..._captionsTimers.values]) {
+    for (final timer in [
+      ..._reactionTimers,
+      ..._captionsTimers.values,
+    ]) {
       timer.cancel();
+    }
+
+    for (final operation in _sfuStatsTimers) {
+      await operation.cancel();
     }
 
     _sfuStatsReporter?.stop();
@@ -1380,9 +1434,7 @@ class Call {
     await _session?.dispose();
     await dynascaleManager.dispose();
 
-    if (_streamVideo.state.activeCall.valueOrNull?.callCid == callCid) {
-      await _streamVideo.state.setActiveCall(null);
-    }
+    await _streamVideo.state.removeActiveCall(this);
 
     if (_streamVideo.state.outgoingCall.valueOrNull?.callCid == callCid) {
       await _streamVideo.state.setOutgoingCall(null);
@@ -1418,9 +1470,7 @@ class Call {
   }
 
   Future<void> _applyCallSettingsToConnectOptions(CallSettings settings) async {
-    // Apply defaul audio output and input devices
-    final mediaDevicesResult =
-        await RtcMediaDeviceNotifier.instance.enumerateDevices();
+    final mediaDevicesResult = await _rtcMediaDeviceNotifier.enumerateDevices();
 
     final mediaDevices = mediaDevicesResult.fold(
       success: (success) => success.data,
@@ -1437,22 +1487,53 @@ class Call {
         .where((d) => d.kind == RtcMediaDeviceKind.videoInput)
         .toList();
 
-    var defaultAudioOutput = audioOutputs.firstWhereOrNull((device) {
-      if (settings.audio.defaultDevice ==
-          AudioSettingsRequestDefaultDeviceEnum.speaker) {
-        return device.id.equalsIgnoreCase(
-          AudioSettingsRequestDefaultDeviceEnum.speaker.value,
+    /// Determines if the speaker should be enabled based on a priority hierarchy of
+    /// settings.
+    ///
+    /// The priority order is as follows:
+    /// 1. If video camera is set to be on by default, speaker is enabled
+    /// 2. If audio speaker is set to be on by default, speaker is enabled
+    /// 3. If the default audio device is set to speaker, speaker is enabled
+    final speakerOnWithSettingsPriority = settings.video.cameraDefaultOn ||
+        settings.audio.speakerDefaultOn ||
+        settings.audio.defaultDevice ==
+            AudioSettingsRequestDefaultDeviceEnum.speaker;
+
+    // Determine default audio output with priority:
+    // 1. External device (if available)
+    var defaultAudioOutput =
+        audioOutputs.firstWhereOrNull((device) => device.isExternal);
+
+    if (defaultAudioOutput == null) {
+      // 2. Speaker (if settings indicate it should be used)
+      if (speakerOnWithSettingsPriority) {
+        defaultAudioOutput = audioOutputs.firstWhereOrNull(
+          (device) => device.id.equalsIgnoreCase(
+            AudioSettingsRequestDefaultDeviceEnum.speaker.value,
+          ),
+        );
+      } else {
+        // 3. First non-speaker device
+        defaultAudioOutput = audioOutputs.firstWhereOrNull(
+          (device) => !device.id.equalsIgnoreCase(
+            AudioSettingsRequestDefaultDeviceEnum.speaker.value,
+          ),
         );
       }
-
-      return !device.id.equalsIgnoreCase(
-        AudioSettingsRequestDefaultDeviceEnum.speaker.value,
-      );
-    });
-
-    if (defaultAudioOutput == null && audioOutputs.isNotEmpty) {
-      defaultAudioOutput = audioOutputs.first;
     }
+
+    final defaultAudioOutputIsExternal =
+        defaultAudioOutput?.isExternal ?? false;
+
+    // iOS doesn't allow implicitly setting the default audio output,
+    // if external device is connected we trust the OS to set it as default.
+    if (defaultAudioOutputIsExternal && CurrentPlatform.isIos) {
+      defaultAudioOutput = null;
+    }
+
+    // Match the default audio input with the default audio output if possible
+    final defaultAudioInput = audioInputs
+        .firstWhereOrNull((d) => d.label == defaultAudioOutput?.label);
 
     var defaultVideoInput = videoInputs.firstWhereOrNull(
       (device) => device.label
@@ -1460,14 +1541,10 @@ class Call {
           .contains(settings.video.cameraFacing.value.toLowerCase()),
     );
 
+    // If it's not front or back then take one of the external cameras
     if (defaultVideoInput == null && videoInputs.length > 2) {
-      // If it's not front or back then take one of the external cameras
       defaultVideoInput = videoInputs.last;
     }
-
-    final defaultAudioInput = audioInputs
-            .firstWhereOrNull((d) => d.label == defaultAudioOutput?.label) ??
-        audioInputs.firstOrNull;
 
     _connectOptions = connectOptions.copyWith(
       camera: TrackOption.fromSetting(
@@ -1483,7 +1560,8 @@ class Call {
               VideoSettingsRequestCameraFacingEnum.front
           ? FacingMode.user
           : FacingMode.environment,
-      speakerDefaultOn: settings.audio.speakerDefaultOn,
+      speakerDefaultOn:
+          !defaultAudioOutputIsExternal && speakerOnWithSettingsPriority,
       targetResolution: settings.video.targetResolution,
       screenShareTargetResolution: settings.screenShare.targetResolution,
     );
@@ -2163,7 +2241,7 @@ class Call {
     await result.fold(
       success: (success) async {
         final mediaDevicesResult =
-            await RtcMediaDeviceNotifier.instance.enumerateDevices();
+            await _rtcMediaDeviceNotifier.enumerateDevices();
 
         final mediaDevices = mediaDevicesResult.fold(
           success: (success) => success.data,
@@ -2285,9 +2363,17 @@ class Call {
             Result.error('Session is null');
 
     if (result.isSuccess) {
+      _sfuStatsTimers.add(
+        Future<void>.delayed(const Duration(seconds: 3)).then((_) {
+          if (result.getDataOrNull()!.mediaTrack.enabled) {
+            _sfuStatsReporter?.sendSfuStats();
+          }
+        }).asCancelable(),
+      );
+
       // Set multitasking camera access for iOS
       final multitaskingResult = await setMultitaskingCameraAccessEnabled(
-        enabled && !_streamVideo.muteVideoWhenInBackground,
+        enabled && !_streamVideo.options.muteVideoWhenInBackground,
       );
 
       _stateManager.participantSetCameraEnabled(
@@ -2301,7 +2387,7 @@ class Call {
       );
     }
 
-    return result;
+    return result.map((_) => none);
   }
 
   Future<Result<None>> setMicrophoneEnabled({
@@ -2319,6 +2405,14 @@ class Call {
         Result.error('Session is null');
 
     if (result.isSuccess) {
+      _sfuStatsTimers.add(
+        Future<void>.delayed(const Duration(seconds: 3)).then((_) {
+          if (result.getDataOrNull()!.mediaTrack.enabled) {
+            _sfuStatsReporter?.sendSfuStats();
+          }
+        }).asCancelable(),
+      );
+
       await _streamVideo.pushNotificationManager
           ?.setCallMutedByCid(callCid.value, !enabled);
 
@@ -2329,13 +2423,9 @@ class Call {
       _connectOptions = _connectOptions.copyWith(
         microphone: enabled ? TrackOption.enabled() : TrackOption.disabled(),
       );
-
-      if (_connectOptions.audioOutputDevice != null) {
-        await setAudioOutputDevice(_connectOptions.audioOutputDevice!);
-      }
     }
 
-    return result;
+    return result.map((_) => none);
   }
 
   Future<bool> requestScreenSharePermission() {

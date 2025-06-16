@@ -19,12 +19,18 @@ abstract class DisconnectReason extends Equatable {
     CallRejectReason? reason,
   }) = DisconnectReasonRejected;
 
+  const factory DisconnectReason.blocked() = DisconnectReasonBlocked;
+
   const factory DisconnectReason.cancelled({
     required String byUserId,
   }) = DisconnectReasonCancelled;
 
   factory DisconnectReason.ended() {
     return DisconnectReasonEnded();
+  }
+
+  factory DisconnectReason.replaced() {
+    return DisconnectReasonReplaced();
   }
 
   factory DisconnectReason.lastParticipantLeft() {
@@ -80,6 +86,15 @@ class DisconnectReasonRejected extends DisconnectReason {
   }
 }
 
+class DisconnectReasonBlocked extends DisconnectReason {
+  const DisconnectReasonBlocked();
+
+  @override
+  String toString() {
+    return 'Blocked';
+  }
+}
+
 class DisconnectReasonCancelled extends DisconnectReason {
   const DisconnectReasonCancelled({
     required this.byUserId,
@@ -109,6 +124,22 @@ class DisconnectReasonEnded extends DisconnectReason {
   @override
   String toString() {
     return 'Ended';
+  }
+}
+
+class DisconnectReasonReplaced extends DisconnectReason {
+  factory DisconnectReasonReplaced() {
+    return _instance;
+  }
+
+  const DisconnectReasonReplaced._internal();
+
+  static const DisconnectReasonReplaced _instance =
+      DisconnectReasonReplaced._internal();
+
+  @override
+  String toString() {
+    return 'Replaced';
   }
 }
 
