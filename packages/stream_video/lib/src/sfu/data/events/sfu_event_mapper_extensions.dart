@@ -11,10 +11,13 @@ import '../models/sfu_connection_info.dart';
 import '../models/sfu_connection_quality.dart';
 import '../models/sfu_error.dart';
 import '../models/sfu_goaway_reason.dart';
+import '../models/sfu_inbound_video_state.dart';
 import '../models/sfu_model_mapper_extensions.dart';
 import '../models/sfu_participant.dart';
+import '../models/sfu_participant_source.dart';
 import '../models/sfu_pin.dart';
 import '../models/sfu_publish_options.dart';
+import '../models/sfu_client_capability.dart';
 import '../models/sfu_track_type.dart';
 import '../models/sfu_video_layer_setting.dart';
 import '../models/sfu_video_sender.dart';
@@ -177,6 +180,18 @@ extension SfuEventMapper on sfu_events.SfuEvent {
         return SfuCallEndedEvent(
           callEndedReason: payload.reason.toDomain(),
         );
+      case sfu_events.SfuEvent_EventPayload.inboundStateNotification:
+        final payload = inboundStateNotification;
+        return SfuInboundStateNotificationEvent(
+          inboundVideoStates: payload.inboundVideoStates
+              .map((s) => SfuInboundVideoState(
+                    userId: s.userId,
+                    sessionId: s.sessionId,
+                    trackType: s.trackType.toDomain(),
+                    paused: s.paused,
+                  ))
+              .toList(),
+        );
       case sfu_events.SfuEvent_EventPayload.participantUpdated:
         final payload = participantUpdated;
         return SfuParticipantUpdatedEvent(
@@ -187,6 +202,18 @@ extension SfuEventMapper on sfu_events.SfuEvent {
         return const SfuParticipantMigrationCompleteEvent();
       default:
         return const SfuUnknownEvent();
+    }
+  }
+}
+
+extension SfuClientCapabilityExtension on sfu_models.ClientCapability {
+  SfuClientCapability toDomain() {
+    switch (this) {
+      case sfu_models.ClientCapability.CLIENT_CAPABILITY_SUBSCRIBER_VIDEO_PAUSE:
+        return SfuClientCapability.subscriberVideoPause;
+      case sfu_models.ClientCapability.CLIENT_CAPABILITY_UNSPECIFIED:
+      default:
+        return SfuClientCapability.unspecified;
     }
   }
 }
@@ -212,7 +239,6 @@ extension on sfu_models.ParticipantCount {
   }
 }
 
-/// TODO
 extension SfuParticipantExtension on sfu_models.Participant {
   SfuParticipant toDomain() {
     return SfuParticipant(
@@ -233,7 +259,7 @@ extension SfuParticipantExtension on sfu_models.Participant {
       isDominantSpeaker: isDominantSpeaker,
       audioLevel: audioLevel,
       roles: roles,
-      //TODO custom: custom.toDomain(),
+      participantSource: source.toDomain(),
     );
   }
 }
@@ -250,7 +276,28 @@ extension SfuConnectionQualityExtension on sfu_models.ConnectionQuality {
       case sfu_models.ConnectionQuality.CONNECTION_QUALITY_UNSPECIFIED:
         return SfuConnectionQuality.unspecified;
       default:
-        throw StateError('unexpected quality: $this');
+        return SfuConnectionQuality.unspecified;
+    }
+  }
+}
+
+extension SfuParticipantSourceExtension on sfu_models.ParticipantSource {
+  SfuParticipantSource toDomain() {
+    switch (this) {
+      case sfu_models.ParticipantSource.PARTICIPANT_SOURCE_RTMP:
+        return SfuParticipantSource.rtmp;
+      case sfu_models.ParticipantSource.PARTICIPANT_SOURCE_WHIP:
+        return SfuParticipantSource.whip;
+      case sfu_models.ParticipantSource.PARTICIPANT_SOURCE_SIP:
+        return SfuParticipantSource.sip;
+      case sfu_models.ParticipantSource.PARTICIPANT_SOURCE_RTSP:
+        return SfuParticipantSource.rtsp;
+      case sfu_models.ParticipantSource.PARTICIPANT_SOURCE_SRT:
+        return SfuParticipantSource.srt;
+      case sfu_models.ParticipantSource.PARTICIPANT_SOURCE_WEBRTC_UNSPECIFIED:
+        return SfuParticipantSource.webrtc;
+      default:
+        return SfuParticipantSource.webrtc;
     }
   }
 }
@@ -265,7 +312,7 @@ extension SfuGoAwayReasonExtension on sfu_models.GoAwayReason {
       case sfu_models.GoAwayReason.GO_AWAY_REASON_UNSPECIFIED:
         return SfuGoAwayReason.unspecified;
       default:
-        throw StateError('unexpected go away reason: $this');
+        return SfuGoAwayReason.unspecified;
     }
   }
 }
@@ -284,7 +331,7 @@ extension SfuCallEndedReasonExtension on sfu_models.CallEndedReason {
       case sfu_models.CallEndedReason.CALL_ENDED_REASON_SESSION_ENDED:
         return SfuCallEndedReason.sessionEnded;
       default:
-        throw StateError('unexpected call ended reason: $this');
+        return SfuCallEndedReason.unspecified;
     }
   }
 }
@@ -303,7 +350,7 @@ extension SfuTrackTypeExtension on sfu_models.TrackType {
       case sfu_models.TrackType.TRACK_TYPE_UNSPECIFIED:
         return SfuTrackType.unspecified;
       default:
-        throw StateError('unexpected track type: $this');
+        return SfuTrackType.unspecified;
     }
   }
 }
@@ -319,12 +366,26 @@ extension SfuErrorCodeExtension on sfu_models.ErrorCode {
         return SfuErrorCode.publishTrackOutOfOrder;
       case sfu_models.ErrorCode.ERROR_CODE_PUBLISH_TRACK_VIDEO_LAYER_NOT_FOUND:
         return SfuErrorCode.publishTrackVideoLayerNotFound;
+      case sfu_models.ErrorCode.ERROR_CODE_LIVE_ENDED:
+        return SfuErrorCode.liveEnded;
       case sfu_models.ErrorCode.ERROR_CODE_PARTICIPANT_NOT_FOUND:
         return SfuErrorCode.participantNotFound;
+      case sfu_models.ErrorCode.ERROR_CODE_PARTICIPANT_MIGRATING_OUT:
+        return SfuErrorCode.participantMigratingOut;
+      case sfu_models.ErrorCode.ERROR_CODE_PARTICIPANT_MIGRATION_FAILED:
+        return SfuErrorCode.participantMigrationFailed;
+      case sfu_models.ErrorCode.ERROR_CODE_PARTICIPANT_MIGRATING:
+        return SfuErrorCode.participantMigrating;
+      case sfu_models.ErrorCode.ERROR_CODE_PARTICIPANT_RECONNECT_FAILED:
+        return SfuErrorCode.participantReconnectFailed;
       case sfu_models.ErrorCode.ERROR_CODE_PARTICIPANT_MEDIA_TRANSPORT_FAILURE:
         return SfuErrorCode.participantMediaTransportFailure;
+      case sfu_models.ErrorCode.ERROR_CODE_PARTICIPANT_SIGNAL_LOST:
+        return SfuErrorCode.participantSignalLost;
       case sfu_models.ErrorCode.ERROR_CODE_CALL_NOT_FOUND:
         return SfuErrorCode.callNotFound;
+      case sfu_models.ErrorCode.ERROR_CODE_CALL_PARTICIPANT_LIMIT_REACHED:
+        return SfuErrorCode.callParticipantLimitReached;
       case sfu_models.ErrorCode.ERROR_CODE_INTERNAL_SERVER_ERROR:
         return SfuErrorCode.internalServerError;
       case sfu_models.ErrorCode.ERROR_CODE_UNSPECIFIED:
@@ -337,8 +398,12 @@ extension SfuErrorCodeExtension on sfu_models.ErrorCode {
         return SfuErrorCode.tooManyRequests;
       case sfu_models.ErrorCode.ERROR_CODE_UNAUTHENTICATED:
         return SfuErrorCode.unauthenticated;
+      case sfu_models.ErrorCode.ERROR_CODE_SFU_SHUTTING_DOWN:
+        return SfuErrorCode.sfuShuttingDown;
+      case sfu_models.ErrorCode.ERROR_CODE_SFU_FULL:
+        return SfuErrorCode.sfuFull;
       default:
-        throw StateError('unexpected error code: $this');
+        return SfuErrorCode.unspecified;
     }
   }
 }
@@ -426,6 +491,7 @@ extension on sfu_models.PublishOption {
       maxTemporalLayers: maxTemporalLayers,
       bitrate: bitrate,
       fps: fps,
+      useSingleLayer: useSingleLayer,
     );
   }
 }

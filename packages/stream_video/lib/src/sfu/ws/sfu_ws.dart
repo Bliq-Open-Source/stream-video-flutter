@@ -4,11 +4,11 @@ import 'package:internet_connection_checker_plus/internet_connection_checker_plu
 
 import '../../../globals.dart';
 import '../../../protobuf/video/sfu/event/events.pb.dart' as sfu_events;
+import '../../core/network_monitor_flutter.dart';
 import '../../errors/video_error_composer.dart';
 import '../../logger/impl/tagged_logger.dart';
 import '../../logger/stream_log.dart';
 import '../../shared_emitter.dart';
-import '../../types/other.dart';
 import '../../utils/none.dart';
 import '../../utils/result.dart';
 import '../../ws/health/health_monitor.dart';
@@ -18,12 +18,13 @@ import '../data/events/sfu_events.dart';
 
 const _tag = 'SV:Sfu-WS';
 
-class SfuWebSocket extends StreamWebSocket
-    with ConnectionStateMixin
-    implements HealthListener {
+class SfuWebSocket extends StreamWebSocket implements HealthListener {
   factory SfuWebSocket({
     required int sessionSeq,
     required String sessionId,
+    required String cid,
+    required String userId,
+    required String apiKey,
     required String sfuUrl,
     required String sfuWsEndpoint,
     required InternetConnection networkMonitor,
@@ -47,10 +48,11 @@ class SfuWebSocket extends StreamWebSocket
           .toString();
     }
     final finalWsEndpoint =
-        '$sfuWsEndpoint?X-Stream-Client=$xStreamClientHeader';
+        '$sfuWsEndpoint?X-Stream-Client=$xStreamClientHeader&attempt=${++sessionSeq}&cid=$cid&user_id=$userId&api_key=$apiKey&user_session_id=$sessionId';
     streamLog.i(tag, () => '<factory> wsEndpoint: $wsEndpoint');
     streamLog.i(tag, () => '<factory> sfuWsEndpoint: $sfuWsEndpoint');
     streamLog.i(tag, () => '<factory> finalWsEndpoint: $finalWsEndpoint');
+
     return SfuWebSocket._(
       finalWsEndpoint,
       protocols: protocols,
@@ -78,7 +80,8 @@ class SfuWebSocket extends StreamWebSocket
   late final HealthMonitor healthMonitor = HealthMonitorImpl(
     'Sfu',
     this,
-    networkMonitor: networkMonitor,
+    networkMonitor:
+        NetworkMonitorFlutter.fromInternetConnection(networkMonitor),
   );
 
   final int sessionSeq;

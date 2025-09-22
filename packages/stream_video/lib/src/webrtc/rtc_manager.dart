@@ -86,16 +86,13 @@ class RtcManager extends Disposable {
     subscriber.onIceCandidate = cb;
   }
 
-  set onSubscriberIssue(OnIssue? cb) {
-    subscriber.onIssue = cb;
-  }
-
-  set onPublisherIssue(OnIssue? cb) {
-    publisher?.onIssue = cb;
-  }
-
   set onRenegotiationNeeded(OnRenegotiationNeeded? cb) {
     publisher?.onRenegotiationNeeded = cb;
+  }
+
+  set onReconnectionNeeded(OnReconnectionNeeded? cb) {
+    subscriber.onReconnectionNeeded = cb;
+    publisher?.onReconnectionNeeded = cb;
   }
 
   OnLocalTrackMuted? onLocalTrackMuted;
@@ -565,8 +562,6 @@ extension PublisherRtcManager on RtcManager {
         muted: transceiverCache.transceiver.sender.track?.enabled ?? true,
       );
     } else if (track is RtcLocalVideoTrack) {
-      final dimension = _getTrackDimension(track);
-
       final encodings = codecs.findOptimalVideoLayers(
         dimensions: _getTrackDimension(track),
         publishOptions: transceiverCache.publishOption,
@@ -584,7 +579,6 @@ extension PublisherRtcManager on RtcManager {
         codec: transceiverCache.publishOption.codec,
         muted: transceiverCache.transceiver.sender.track?.enabled ?? true,
         layers: encodings.map((it) {
-          final scale = it.scaleResolutionDownBy ?? 1;
           return RtcVideoLayer(
             rid: it.rid ?? '',
             parameters: RtcVideoParameters(
@@ -594,8 +588,8 @@ extension PublisherRtcManager on RtcManager {
                 quality: ridToVideoQuality(it.rid ?? ''),
               ),
               dimension: RtcVideoDimension(
-                width: (dimension.width / scale).floor(),
-                height: (dimension.height / scale).floor(),
+                width: it.width.floor(),
+                height: it.height.floor(),
               ),
             ),
           );
@@ -764,23 +758,29 @@ extension PublisherRtcManager on RtcManager {
   /// this layer will have the additional spatial and temporal layers
   /// defined via the scalabilityMode property.
   List<rtc.RTCRtpEncoding> toSvcEncodings(List<rtc.RTCRtpEncoding> layers) {
-    // We take the `f` layer, and we rename it to `q`.
-    return layers
-        .where((layer) => layer.rid == 'f')
-        .map(
-          (layer) => rtc.RTCRtpEncoding(
-            rid: 'q',
-            active: layer.active,
-            maxBitrate: layer.maxBitrate,
-            maxFramerate: layer.maxFramerate,
-            minBitrate: layer.minBitrate,
-            numTemporalLayers: layer.numTemporalLayers,
-            scaleResolutionDownBy: layer.scaleResolutionDownBy,
-            ssrc: layer.ssrc,
-            scalabilityMode: layer.scalabilityMode,
-          ),
-        )
-        .toList();
+    rtc.RTCRtpEncoding? findByRid(String rid) {
+      for (final layer in layers) {
+        if (layer.rid == rid) return layer;
+      }
+      return null;
+    }
+
+    final highestLayer = findByRid('f') ?? findByRid('h') ?? findByRid('q');
+    if (highestLayer == null) return [];
+
+    return [
+      rtc.RTCRtpEncoding(
+        rid: 'q',
+        active: highestLayer.active,
+        maxBitrate: highestLayer.maxBitrate,
+        maxFramerate: highestLayer.maxFramerate,
+        minBitrate: highestLayer.minBitrate,
+        numTemporalLayers: highestLayer.numTemporalLayers,
+        scaleResolutionDownBy: highestLayer.scaleResolutionDownBy,
+        ssrc: highestLayer.ssrc,
+        scalabilityMode: highestLayer.scalabilityMode,
+      ),
+    ];
   }
 
   Future<
@@ -1059,8 +1059,11 @@ extension RtcManagerTrackHelper on RtcManager {
   }) async {
     final track = getPublisherTrackByType(SfuTrackType.audio);
     if (track == null) {
-      _logger.w(() => '[setMicrophoneDeviceId] rejected (track is null)');
-      return Result.error('Track is null');
+      _logger.d(() => '[setMicrophoneDeviceId] rejected (track is null)');
+      return Result.errorWithCause(
+        'Track is null',
+        TrackMissingException(trackType: SfuTrackType.audio),
+      );
     }
 
     if (track is! RtcLocalAudioTrack) {
@@ -1342,5 +1345,15 @@ extension on RtcLocalTrack<VideoConstraints> {
       }
     }
     return dimension;
+  }
+}
+
+class TrackMissingException implements Exception {
+  TrackMissingException({required this.trackType});
+  final SfuTrackType trackType;
+
+  @override
+  String toString() {
+    return 'TrackMissingException: Track with type "$trackType" is missing.';
   }
 }

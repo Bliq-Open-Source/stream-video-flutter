@@ -311,6 +311,7 @@ class Participant extends $pb.GeneratedMessage {
     $core.String? image,
     $1.Struct? custom,
     $core.Iterable<$core.String>? roles,
+    ParticipantSource? source,
   }) {
     final $result = create();
     if (userId != null) {
@@ -352,6 +353,9 @@ class Participant extends $pb.GeneratedMessage {
     if (roles != null) {
       $result.roles.addAll(roles);
     }
+    if (source != null) {
+      $result.source = source;
+    }
     return $result;
   }
   Participant._() : super();
@@ -391,6 +395,11 @@ class Participant extends $pb.GeneratedMessage {
     ..aOM<$1.Struct>(12, _omitFieldNames ? '' : 'custom',
         subBuilder: $1.Struct.create)
     ..pPS(13, _omitFieldNames ? '' : 'roles')
+    ..e<ParticipantSource>(
+        14, _omitFieldNames ? '' : 'source', $pb.PbFieldType.OE,
+        defaultOrMaker: ParticipantSource.PARTICIPANT_SOURCE_WEBRTC_UNSPECIFIED,
+        valueOf: ParticipantSource.valueOf,
+        enumValues: ParticipantSource.values)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('Using this can add significant overhead to your binary. '
@@ -557,6 +566,18 @@ class Participant extends $pb.GeneratedMessage {
 
   @$pb.TagNumber(13)
   $pb.PbList<$core.String> get roles => $_getList(12);
+
+  @$pb.TagNumber(14)
+  ParticipantSource get source => $_getN(13);
+  @$pb.TagNumber(14)
+  set source(ParticipantSource v) {
+    $_setField(14, v);
+  }
+
+  @$pb.TagNumber(14)
+  $core.bool hasSource() => $_has(13);
+  @$pb.TagNumber(14)
+  void clearSource() => $_clearField(14);
 }
 
 class StreamQuality extends $pb.GeneratedMessage {
@@ -945,6 +966,7 @@ class PublishOption extends $pb.GeneratedMessage {
     $core.int? maxTemporalLayers,
     VideoDimension? videoDimension,
     $core.int? id,
+    $core.bool? useSingleLayer,
   }) {
     final $result = create();
     if (trackType != null) {
@@ -970,6 +992,9 @@ class PublishOption extends $pb.GeneratedMessage {
     }
     if (id != null) {
       $result.id = id;
+    }
+    if (useSingleLayer != null) {
+      $result.useSingleLayer = useSingleLayer;
     }
     return $result;
   }
@@ -1000,6 +1025,7 @@ class PublishOption extends $pb.GeneratedMessage {
     ..aOM<VideoDimension>(7, _omitFieldNames ? '' : 'videoDimension',
         subBuilder: VideoDimension.create)
     ..a<$core.int>(8, _omitFieldNames ? '' : 'id', $pb.PbFieldType.O3)
+    ..aOB(9, _omitFieldNames ? '' : 'useSingleLayer')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('Using this can add significant overhead to your binary. '
@@ -1155,6 +1181,21 @@ class PublishOption extends $pb.GeneratedMessage {
   $core.bool hasId() => $_has(7);
   @$pb.TagNumber(8)
   void clearId() => $_clearField(8);
+
+  /// If true, instructs the publisher to send only the highest available simulcast layer,
+  /// disabling all lower layers. This applies to simulcast encodings.
+  /// For SVC codecs, prefer using the L1T3 (single spatial, 3 temporal layers) mode instead.
+  @$pb.TagNumber(9)
+  $core.bool get useSingleLayer => $_getBF(8);
+  @$pb.TagNumber(9)
+  set useSingleLayer($core.bool v) {
+    $_setBool(8, v);
+  }
+
+  @$pb.TagNumber(9)
+  $core.bool hasUseSingleLayer() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearUseSingleLayer() => $_clearField(9);
 }
 
 class Codec extends $pb.GeneratedMessage {

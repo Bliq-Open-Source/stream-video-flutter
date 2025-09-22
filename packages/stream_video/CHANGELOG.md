@@ -1,3 +1,70 @@
+## 0.10.4
+
+✅ Added
+* Extended `CallParticipantState` with `participantSource`. This indicates the participant's source channel (e.g., WebRTC, RTMP, WHIP) and can be used in filtering and sorting criteria.
+* Livestream sorting preset now prioritises RTMP sources in layout sorting.
+* Automatic SFU-driven pausing of inbound video to save bandwidth and prevent visual artifacts:
+  * New `SfuClientCapability.subscriberVideoPause` (on by default). Control via `Call.enableClientCapabilities()` / `Call.disableClientCapabilities()`.
+  * New `SfuInboundStateNotificationEvent` notifies when inbound tracks are paused or resumed.
+  * `CallParticipantState.pausedTracks` and `CallParticipantState.isTrackPaused()` let you check which tracks are currently paused.
+* Added capability to remove a participant from a call via `call.kickUser()`. Requires the `kick-user` permission.
+
+🐞 Fixed
+* Multitasking camera on iOS is now enabled only once and kept enabled. This fixes potential errors when quickly toggling camera.
+
+## 0.10.3
+
+🐞 Fixed
+* Handled SFU stats reporting failures gracefully
+
+✅ Added
+* Added option to configure android audio configuration when initializing `StreamVideo` instance by providing `androidAudioConfiguration` to `StreamVideoOptions`.
+
+## 0.10.2
+
+✅ Added
+* Introduced the `reconnectTimeout` option in `CallPreferences`, allowing you to set the maximum duration the SDK will attempt to reconnect to a call before giving up.
+* `SpeakingWhileMutedRecognition` to notify users when there is audio input, but microphone is muted.
+* Added tracking for failed SFU join attempts. If a client fails to connect to the same SFU twice, it will now request a new SFU from the Coordinator. Also added max join retries counter (default to 3) to improve call connection reliability - it can be configured by providing `maxJoinRetries` parameter in `join()` method.
+
+🔄 Changed
+* Deprecated `callRejoinTimeout` in `RetryConfig`, instead added `networkAvailabilityTimeout` to `CallPreferences` to control how long the SDK waits for network connectivity to be restored during reconnection attempts before timing out.
+
+🐞 Fixed
+* Sorting of participants after screen sharing stopped.
+* Fixed `DtlsSrtpKeyAgreement` audio constraint parameter mapping
+
+🔄 Dependency updates
+* Updated `flutter_callkit_incoming` dependency to the latests (2.5.5) version. That version contains Android 14 compatibility fixes for ringing notifications and lock screen handling.
+
+## 0.10.1
+
+✅ Added
+* Added support for customization of display name for ringing notifications by providing `display_name` custom data to the call. See the [documentation](https://getstream.io/video/docs/flutter/advanced/incoming-calls/customization/#display-name-customization) for details.
+
+🐞 Fixed
+* Fixed an issue where the last reaction was removed too fast when a user sends multiple reactions quickly after each other.
+* Fixed an issue where toggling camera enabled quickly could cause AVCaptureMultiCamSession to crash.
+* Fixed an issue where the default camera selection would occasionally be incorrect even when properly configured.
+* Fixed an issue where changing the audio input device while muted from the start of a call would not apply the new device when unmuting. The selected device will now be correctly set upon unmuting.
+* Fixed an issue where coordinator events were not listened to after a fast reconnect in a Call.
+* Fixes an issue with `muteUsers` method when called for all tracks.
+
+## 0.10.0
+
+✅ Added
+* Added `setMirrorVideo` method to `Call` class to control video mirroring for participants.
+* Added `call.partialState` for more specific and efficient state updates.
+
+* Added `maxParticipantsExcludeOwner` and `maxParticipantsExcludeRoles` to Call limits settings, providing finer control over participant limits by allowing exclusion of call owners and specific roles from the maximum count.
+
+🐞 Fixed
+* Improved SFU error handling in Call flow and disconnect reason handling. The disconnected call state now accurately reflects the original cause of disconnection.
+* Fixed an issue where rejecting a ringing call on one device would incorrectly end the call for all already connected participants.
+* Enhanced fast reconnect mechanism with improved PeerConnection issue detection and recovery. The system now attempts multiple fast reconnects before falling back to a full call rejoin.
+* Fixed simulcast video quality by correcting resolution calculations and layer selection for optimal video track display.
+* Fixed an edge case where a call with the same CID as an incoming call is also an outgoing call to ensure the same Call instance is used.
+
 ## 0.9.6
 
 ✅ Added

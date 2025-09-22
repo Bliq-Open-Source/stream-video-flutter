@@ -22,7 +22,12 @@ command:
       device_info_plus: ">=10.1.2 <12.0.0"
       share_plus: ^11.0.0
       stream_chat_flutter: ^9.8.0
-      stream_webrtc_flutter: ^1.0.7
+      stream_webrtc_flutter: ^1.0.11
+      stream_video: ^0.10.4
+      stream_video_flutter: ^0.10.4
+      stream_video_noise_cancellation: ^0.10.4
+      stream_video_push_notification: ^0.10.4
+      stream_video_screen_sharing: ^0.10.4
 
 scripts:
   postclean:
@@ -120,6 +125,13 @@ scripts:
     packageFilters:
       flutter: true
       dirExists: test
+
+  test:fixes:
+    run: melos exec -c 4 --fail-fast -- "cd test_fixes && dart fix --compare-to-golden"
+    description: Verify dart fixes for a specific package in this project.
+    packageFilters:
+      flutter: true
+      dirExists: test_fixes
 
   update:goldens:
     run: melos exec -c 1 --depends-on="alchemist" -- "flutter test --tags golden --update-goldens"

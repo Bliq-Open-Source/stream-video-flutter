@@ -129,6 +129,24 @@ class PermissionsManager {
     return result;
   }
 
+  Future<Result<None>> kickUser(
+    String userId, {
+    bool block = false,
+  }) async {
+    if (!hasPermission(CallPermission.kickUser)) {
+      _logger.w(() => '[kickUser] rejected (no permission)');
+      return Result.error('Cannot kick user (no permission)');
+    }
+    _logger.d(() => '[kickUser] userId: $userId');
+    final result = await coordinatorClient.kickUser(
+      callCid: callCid,
+      userId: userId,
+      block: block,
+    );
+    _logger.v(() => '[kickUser] result: $result');
+    return result;
+  }
+
   Future<Result<None>> startRecording({
     String? recordingExternalStorage,
   }) async {
@@ -163,13 +181,22 @@ class PermissionsManager {
     return result;
   }
 
-  Future<Result<None>> startTranscription() async {
+  Future<Result<None>> startTranscription({
+    bool? enableClosedCaptions,
+    TranscriptionSettingsLanguage? language,
+    String? transcriptionExternalStorage,
+  }) async {
     if (!hasPermission(CallPermission.startTranscriptionCall)) {
       _logger.w(() => '[startTranscription] rejected (no permission)');
       return Result.error('Cannot start transcription (no permission)');
     }
     _logger.d(() => '[startTranscription] no args');
-    final result = await coordinatorClient.startTranscription(callCid);
+    final result = await coordinatorClient.startTranscription(
+      callCid,
+      enableClosedCaptions: enableClosedCaptions,
+      language: language,
+      transcriptionExternalStorage: transcriptionExternalStorage,
+    );
     _logger.v(() => '[startTranscription] result: $result');
     return result;
   }
@@ -192,13 +219,22 @@ class PermissionsManager {
     return result;
   }
 
-  Future<Result<None>> startClosedCaptions() async {
+  Future<Result<None>> startClosedCaptions({
+    bool? enableTranscription,
+    TranscriptionSettingsLanguage? language,
+    String? transcriptionExternalStorage,
+  }) async {
     if (!hasPermission(CallPermission.startClosedCaptionsCall)) {
       _logger.w(() => '[startClosedCaptions] rejected (no permission)');
       return Result.error('Cannot start closed captions (no permission)');
     }
     _logger.d(() => '[startClosedCaptions] no args');
-    final result = await coordinatorClient.startClosedCaptions(callCid);
+    final result = await coordinatorClient.startClosedCaptions(
+      callCid,
+      enableTranscription: enableTranscription,
+      language: language,
+      transcriptionExternalStorage: transcriptionExternalStorage,
+    );
     _logger.v(() => '[startClosedCaptions] result: $result');
     return result;
   }
@@ -289,14 +325,15 @@ class PermissionsManager {
 
     final usersToMute = <String>[];
     for (final participant in stateManager.callState.otherParticipants) {
-      if (participant.publishedTracks.containsKey(track.toSFUTrackType())) {
+      if ((track == TrackType.all && participant.publishedTracks.isNotEmpty) ||
+          participant.publishedTracks.containsKey(track.toSFUTrackType())) {
         usersToMute.add(participant.userId);
       }
     }
     return muteUsers(userIds: usersToMute, track: track);
   }
 
-  Future<Result<None>> muteAllUsers() async {
+  Future<Result<None>> muteAllUsers({TrackType track = TrackType.all}) async {
     if (!hasPermission(CallPermission.muteUsers)) {
       _logger.w(() => '[muteAllUsers] rejected (no permission)');
       return Result.error('Cannot mute users (no permission)');
@@ -307,9 +344,9 @@ class PermissionsManager {
       callCid: callCid,
       muteAllUsers: true,
       userIds: const [],
-      audio: true,
-      video: true,
-      screenshare: true,
+      audio: track == TrackType.audio || track == TrackType.all,
+      video: track == TrackType.video || track == TrackType.all,
+      screenshare: track == TrackType.screenshare || track == TrackType.all,
     );
   }
 

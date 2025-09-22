@@ -72,9 +72,11 @@ class _StreamVideoRendererState extends State<StreamVideoRenderer> {
   Widget build(BuildContext context) {
     final trackState =
         widget.participant.publishedTracks[widget.videoTrackType];
+    final isTrackPaused =
+        widget.participant.isTrackPaused(widget.videoTrackType);
 
     final Widget child;
-    if (trackState == null) {
+    if (trackState == null || isTrackPaused) {
       // The video track hasn't been published or subscribed yet.
       child = widget.placeholderBuilder.call(context);
     } else if (trackState is! RemoteTrackState) {
@@ -124,7 +126,8 @@ class _StreamVideoRendererState extends State<StreamVideoRenderer> {
       return widget.placeholderBuilder.call(context);
     }
 
-    var mirror = widget.participant.isLocal;
+    var mirror = (trackState is RemoteTrackState && trackState.mirrorVideo) ||
+        widget.participant.isLocal;
 
     if (videoTrack is RtcLocalScreenShareTrack) {
       mirror = false;
@@ -152,7 +155,10 @@ class _StreamVideoRendererState extends State<StreamVideoRenderer> {
     latestVisibilityInfo = info;
     final fraction = info.visibleFraction;
 
-    final prevVisibility = widget.participant.viewportVisibility;
+    final prevVisibility = widget.videoTrackType.isScreenShare
+        ? widget.participant.screenShareViewportVisibility
+        : widget.participant.viewportVisibility;
+
     final visibility = ViewportVisibility.fromVisibleFraction(fraction);
 
     // Update the viewport visibility of the participant.
@@ -161,6 +167,7 @@ class _StreamVideoRendererState extends State<StreamVideoRenderer> {
         sessionId: widget.participant.sessionId,
         userId: widget.participant.userId,
         visibility: visibility,
+        trackType: widget.videoTrackType,
       );
     }
 
@@ -168,6 +175,14 @@ class _StreamVideoRendererState extends State<StreamVideoRenderer> {
     if (visibility != ViewportVisibility.visible) {
       // If the visibility is not visible, set the size to zero.
       size = Size.zero;
+    } else {
+      // VisibilityDetector measures the size in logical, device-independent pixels.
+      // We need to convert it to device pixels to get the correct size for the video track.
+      final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+      size = Size(
+        size.width * devicePixelRatio,
+        size.height * devicePixelRatio,
+      );
     }
 
     return _onSizeChanged(size, participantId);

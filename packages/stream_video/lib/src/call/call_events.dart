@@ -366,10 +366,16 @@ class StreamCallEndedEvent extends StreamCallEvent {
     super.callCid, {
     required this.endedBy,
     required this.createdAt,
+    required this.metadata,
+    required this.type,
+    this.reason,
   });
 
   final CallUser? endedBy;
   final DateTime createdAt;
+  final CallMetadata metadata;
+  final String type;
+  final String? reason;
 
   String? get endedByUserId => endedBy?.id;
 
@@ -849,9 +855,11 @@ class StreamCallTranscriptionFailedEvent extends StreamCallEvent {
   const StreamCallTranscriptionFailedEvent(
     super.callCid, {
     required this.createdAt,
+    this.error,
   });
 
   final DateTime createdAt;
+  final String? error;
 
   @override
   List<Object?> get props => [
@@ -1026,6 +1034,28 @@ class StreamCallUserUnblockedEvent extends StreamCallEvent {
         callCid,
         createdAt,
         user,
+      ];
+}
+
+/// Event that is triggered when the user is kicked from a call.
+class StreamCallUserKickedEvent extends StreamCallEvent {
+  const StreamCallUserKickedEvent(
+    super.callCid, {
+    required this.createdAt,
+    required this.user,
+    required this.kickedByUser,
+  });
+
+  final DateTime createdAt;
+  final CallUser user;
+  final CallUser? kickedByUser;
+
+  @override
+  List<Object?> get props => [
+        ...super.props,
+        createdAt,
+        user,
+        kickedByUser,
       ];
 }
 
@@ -1325,6 +1355,9 @@ extension CoordinatorCallEventX on CoordinatorCallEvent {
           event.callCid,
           endedBy: event.endedBy,
           createdAt: event.createdAt,
+          metadata: event.metadata,
+          type: event.type,
+          reason: event.reason,
         ),
       final CoordinatorCallAcceptedEvent event => StreamCallAcceptedEvent(
           event.callCid,
@@ -1389,6 +1422,7 @@ extension CoordinatorCallEventX on CoordinatorCallEvent {
         StreamCallTranscriptionFailedEvent(
           event.callCid,
           createdAt: event.createdAt,
+          error: event.error,
         ),
       final CoordinatorCallClosedCaptionStartedEvent event =>
         StreamCallClosedCaptionsStartedEvent(
@@ -1435,6 +1469,12 @@ extension CoordinatorCallEventX on CoordinatorCallEvent {
           event.callCid,
           createdAt: event.createdAt,
           user: event.user,
+        ),
+      final CoordinatorCallUserKickedEvent event => StreamCallUserKickedEvent(
+          event.callCid,
+          createdAt: event.createdAt,
+          user: event.user,
+          kickedByUser: event.kickedByUser,
         ),
       final CoordinatorCallUserUnblockedEvent event =>
         StreamCallUserUnblockedEvent(

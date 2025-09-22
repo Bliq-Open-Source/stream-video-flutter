@@ -31,10 +31,12 @@ class CallScreen extends StatefulWidget {
     super.key,
     required this.call,
     this.connectOptions,
+    this.videoEffectsManager,
   });
 
   final Call call;
   final CallConnectOptions? connectOptions;
+  final StreamVideoEffectsManager? videoEffectsManager;
 
   @override
   State<CallScreen> createState() => _CallScreenState();
@@ -42,7 +44,8 @@ class CallScreen extends StatefulWidget {
 
 class _CallScreenState extends State<CallScreen> {
   late final _userChatRepo = locator.get<UserChatRepository>();
-  late final _videoEffectsManager = StreamVideoEffectsManager(widget.call);
+  late final _videoEffectsManager =
+      widget.videoEffectsManager ?? StreamVideoEffectsManager(widget.call);
 
   Channel? _channel;
   ParticipantLayoutMode _currentLayoutMode = ParticipantLayoutMode.grid;
@@ -58,6 +61,7 @@ class _CallScreenState extends State<CallScreen> {
   void dispose() {
     widget.call.leave();
     _userChatRepo.disconnectUser();
+    _videoEffectsManager.dispose();
     super.dispose();
   }
 
@@ -130,20 +134,18 @@ class _CallScreenState extends State<CallScreen> {
               showFeedbackDialog(context, call: widget.call);
             }
           },
-          callContentBuilder: (
+          callContentWidgetBuilder: (
             BuildContext context,
             Call call,
-            CallState callState,
           ) {
             return StreamCallContent(
               call: call,
-              callState: callState,
               layoutMode: _currentLayoutMode,
               pictureInPictureConfiguration:
                   const PictureInPictureConfiguration(
                 enablePictureInPicture: true,
               ),
-              callParticipantsBuilder: (context, call, callState) {
+              callParticipantsWidgetBuilder: (context, call) {
                 return Stack(
                   children: [
                     Column(
@@ -151,7 +153,6 @@ class _CallScreenState extends State<CallScreen> {
                         Expanded(
                           child: StreamCallParticipants(
                             call: call,
-                            participants: callState.callParticipants,
                             layoutMode: _currentLayoutMode,
                           ),
                         ),
@@ -194,19 +195,23 @@ class _CallScreenState extends State<CallScreen> {
                         ),
                       ),
                     ],
-                    if (!_moreMenuVisible &&
-                        (call.state.valueOrNull?.otherParticipants.isEmpty ??
-                            false))
+                    if (!_moreMenuVisible)
                       Positioned(
                         bottom: 0,
                         left: 0,
                         right: 0,
-                        child: ShareCallWelcomeCard(callId: call.id),
+                        child: PartialCallStateBuilder(
+                          call: call,
+                          selector: (state) => state.otherParticipants.isEmpty,
+                          builder: (context, isEmpty) => isEmpty
+                              ? ShareCallWelcomeCard(callId: call.id)
+                              : const SizedBox.shrink(),
+                        ),
                       )
                   ],
                 );
               },
-              callAppBarBuilder: (context, call, callState) {
+              callAppBarWidgetBuilder: (context, call) {
                 return CallAppBar(
                   call: call,
                   leadingWidth: 120,
@@ -219,22 +224,25 @@ class _CallScreenState extends State<CallScreen> {
                           });
                         },
                       ),
-                      if (call.state.valueOrNull?.localParticipant != null)
-                        FlipCameraOption(
-                          call: call,
-                          localParticipant: call.state.value.localParticipant!,
-                        ),
+                      PartialCallStateBuilder(
+                        call: call,
+                        selector: (state) => state.localParticipant != null,
+                        builder: (context, hasLocalParticipant) =>
+                            hasLocalParticipant
+                                ? FlipCameraOption(
+                                    call: call,
+                                  )
+                                : const SizedBox.shrink(),
+                      ),
                     ],
                   ),
                   title: CallDurationTitle(call: call),
                 );
               },
-              callControlsBuilder: (
+              callControlsWidgetBuilder: (
                 BuildContext context,
                 Call call,
-                CallState callState,
               ) {
-                final localParticipant = callState.localParticipant!;
                 return Container(
                   padding: const EdgeInsets.only(
                     top: 16,
@@ -254,7 +262,6 @@ class _CallScreenState extends State<CallScreen> {
                           }),
                       ToggleScreenShareOption(
                         call: call,
-                        localParticipant: localParticipant,
                         screenShareConstraints: const ScreenShareConstraints(
                           useiOSBroadcastExtension: true,
                         ),
@@ -268,24 +275,28 @@ class _CallScreenState extends State<CallScreen> {
                       ),
                       ToggleMicrophoneOption(
                         call: call,
-                        localParticipant: localParticipant,
                         disabledMicrophoneBackgroundColor:
                             AppColorPalette.appRed,
                       ),
                       ToggleCameraOption(
                         call: call,
-                        localParticipant: localParticipant,
                         disabledCameraBackgroundColor: AppColorPalette.appRed,
                       ),
                       const Spacer(),
-                      BadgedCallOption(
-                        callControlOption: CallControlOption(
-                          icon: const Icon(Icons.people),
-                          onPressed: _channel != null //
-                              ? () => showParticipants(context)
-                              : null,
-                        ),
-                        badgeCount: callState.callParticipants.length,
+                      PartialCallStateBuilder(
+                        call: call,
+                        selector: (state) => state.callParticipants.length,
+                        builder: (context, length) {
+                          return BadgedCallOption(
+                            callControlOption: CallControlOption(
+                              icon: const Icon(Icons.people),
+                              onPressed: _channel != null //
+                                  ? () => showParticipants(context)
+                                  : null,
+                            ),
+                            badgeCount: length,
+                          );
+                        },
                       ),
                       _ShowChatButton(channel: _channel),
                     ]),
