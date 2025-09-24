@@ -10,52 +10,39 @@ import 'package:synchronized/synchronized.dart';
 import 'package:system_info2/system_info2.dart';
 
 import '../../../globals.dart';
-import '../../../open_api/video/coordinator/api.dart';
 import '../../../protobuf/video/sfu/event/events.pb.dart' as sfu_events;
 import '../../../protobuf/video/sfu/models/models.pb.dart' as sfu_models;
 import '../../../protobuf/video/sfu/models/models.pbenum.dart';
 import '../../../protobuf/video/sfu/signal_rpc/signal.pb.dart' as sfu;
+import '../../../stream_video.dart';
 import '../../disposable.dart';
 import '../../errors/video_error.dart';
 import '../../errors/video_error_composer.dart';
-import '../../logger/impl/tagged_logger.dart';
-import '../../models/models.dart';
-import '../../platform_detector/platform_detector.dart';
 import '../../sfu/data/events/sfu_events.dart';
 import '../../sfu/data/models/sfu_call_state.dart';
-import '../../sfu/data/models/sfu_error.dart';
+import '../../sfu/data/models/sfu_client_capability.dart';
 import '../../sfu/data/models/sfu_model_mapper_extensions.dart';
 import '../../sfu/data/models/sfu_subscription_details.dart';
-import '../../sfu/data/models/sfu_track_type.dart';
 import '../../sfu/sfu_client.dart';
 import '../../sfu/sfu_extensions.dart';
 import '../../sfu/ws/sfu_ws.dart';
 import '../../shared_emitter.dart';
 import '../../utils/debounce_buffer.dart';
-import '../../utils/none.dart';
-import '../../utils/result.dart';
-import '../../webrtc/media/media_constraints.dart';
 import '../../webrtc/model/rtc_model_mapper_extensions.dart';
 import '../../webrtc/model/rtc_tracks_info.dart';
 import '../../webrtc/peer_connection.dart';
-import '../../webrtc/peer_type.dart';
 import '../../webrtc/rtc_manager.dart';
 import '../../webrtc/rtc_manager_factory.dart';
-import '../../webrtc/rtc_media_device/rtc_media_device.dart';
-import '../../webrtc/rtc_track/rtc_track.dart';
 import '../../webrtc/sdp/editor/sdp_editor.dart';
 import '../../ws/ws.dart';
 import '../state/call_state_notifier.dart';
 import '../stats/tracer.dart';
 import 'call_session_config.dart';
-import 'dynascale_manager.dart';
 
 const _tag = 'SV:CallSession';
 
 const _debounceDuration = Duration(milliseconds: 200);
 const _migrationCompleteEventTimeout = Duration(seconds: 7);
-
-typedef OnPeerConnectionIssue = void Function(StreamPeerConnection pc);
 
 class CallSession extends Disposable {
   CallSession({
@@ -65,14 +52,16 @@ class CallSession extends Disposable {
     required this.config,
     required this.stateManager,
     required this.dynascaleManager,
-    required this.onPeerConnectionIssue,
+    required this.onReconnectionNeeded,
     required SdpEditor sdpEditor,
     required this.networkMonitor,
     required this.statsOptions,
+    required StreamVideo streamVideo,
     required Tracer tracer,
     this.clientPublishOptions,
     this.joinResponseTimeout = const Duration(seconds: 5),
   })  : _tracer = tracer,
+        _streamVideo = streamVideo,
         sfuClient = SfuClient(
           baseUrl: config.sfuUrl,
           sfuToken: config.sfuToken,
@@ -84,6 +73,9 @@ class CallSession extends Disposable {
           sfuUrl: config.sfuUrl,
           sfuWsEndpoint: config.sfuWsEndpoint,
           sessionId: sessionId,
+          cid: callCid.value,
+          userId: streamVideo.currentUser.id,
+          apiKey: streamVideo.apiKey,
           networkMonitor: networkMonitor,
         ),
         rtcManagerFactory = RtcManagerFactory(
@@ -107,11 +99,12 @@ class CallSession extends Disposable {
   final SfuClient sfuClient;
   final SfuWebSocket sfuWS;
   final RtcManagerFactory rtcManagerFactory;
-  final OnPeerConnectionIssue onPeerConnectionIssue;
+  final OnReconnectionNeeded onReconnectionNeeded;
   final ClientPublishOptions? clientPublishOptions;
   final InternetConnection networkMonitor;
   final StatsOptions statsOptions;
   final Tracer _tracer;
+  final StreamVideo _streamVideo;
 
   final Duration joinResponseTimeout;
 
@@ -263,6 +256,7 @@ class CallSession extends Disposable {
             Duration fastReconnectDeadline,
           })>> start({
     sfu_events.ReconnectDetails? reconnectDetails,
+    Set<SfuClientCapability> capabilities = const {},
     FutureOr<void> Function(RtcManager)? onRtcManagerCreatedCallback,
     bool isAnonymousUser = false,
   }) async {
@@ -339,6 +333,9 @@ class CallSession extends Disposable {
         reconnectDetails: reconnectDetails,
         preferredPublishOptions: preferredPublishOptions,
         preferredSubscribeOptions: preferredSubscribeOptions,
+        capabilities: capabilities.map((c) => c.toDTO()).toList(),
+        source:
+            sfu_models.ParticipantSource.PARTICIPANT_SOURCE_WEBRTC_UNSPECIFIED,
       );
 
       _tracer.trace('joinRequest', joinRequest.toJson());
@@ -350,25 +347,39 @@ class CallSession extends Disposable {
       );
 
       _logger.v(() => '[start] wait for SfuJoinResponseEvent');
-      final event = await sfuWS.events.waitFor<SfuJoinResponseEvent>(
+      final joinResponseFuture = sfuWS.events.waitFor<SfuJoinResponseEvent>(
         timeLimit: joinResponseTimeout,
       );
+
+      final sfuErrorFuture =
+          sfuWS.events.waitFor<SfuErrorEvent>(timeLimit: joinResponseTimeout);
+
+      final event = await Future.any([joinResponseFuture, sfuErrorFuture]);
+
+      if (event is SfuErrorEvent) {
+        _logger.e(() => '[start] sfu error: ${event.error}');
+        return Result.errorWithCause(event.error.message, event.error);
+      }
+
+      final joinResponseEvent = event as SfuJoinResponseEvent;
 
       _logger.v(() => '[start] sfu joined: $event');
 
       if (isAnonymousUser) {
         rtcManager = await rtcManagerFactory.makeRtcManager(
+          sfuClient: sfuClient,
           clientDetails: _clientDetails,
           sessionSequence: sessionSeq,
           statsOptions: statsOptions,
         )
           ..onSubscriberIceCandidate = _onLocalIceCandidate
-          ..onSubscriberIssue = onPeerConnectionIssue
           ..onRenegotiationNeeded = _onRenegotiationNeeded
+          ..onReconnectionNeeded = onReconnectionNeeded
           ..onRemoteTrackReceived = _onRemoteTrackReceived;
       } else {
         final currentUserId = stateManager.callState.currentUserId;
-        final localParticipant = event.callState.participants.firstWhere(
+        final localParticipant =
+            joinResponseEvent.callState.participants.firstWhere(
           (it) => it.userId == currentUserId && it.sessionId == sessionId,
         );
         final localTrackId = localParticipant.trackLookupPrefix;
@@ -376,8 +387,9 @@ class CallSession extends Disposable {
         _logger.v(() => '[start] localTrackId: $localTrackId');
 
         rtcManager = await rtcManagerFactory.makeRtcManager(
+          sfuClient: sfuClient,
           publisherId: localTrackId,
-          publishOptions: event.publishOptions,
+          publishOptions: joinResponseEvent.publishOptions,
           clientDetails: _clientDetails,
           sessionSequence: sessionSeq,
           statsOptions: statsOptions,
@@ -385,10 +397,9 @@ class CallSession extends Disposable {
         )
           ..onPublisherIceCandidate = _onLocalIceCandidate
           ..onSubscriberIceCandidate = _onLocalIceCandidate
-          ..onPublisherIssue = onPeerConnectionIssue
-          ..onSubscriberIssue = onPeerConnectionIssue
           ..onLocalTrackMuted = _onLocalTrackMuted
           ..onLocalTrackPublished = _onLocalTrackPublished
+          ..onReconnectionNeeded = onReconnectionNeeded
           ..onRenegotiationNeeded = _onRenegotiationNeeded
           ..onRemoteTrackReceived = _onRemoteTrackReceived;
       }
@@ -462,6 +473,8 @@ class CallSession extends Disposable {
             reconnectDetails: reconnectDetails,
             preferredPublishOptions:
                 rtcManager?.publishOptions.map((o) => o.toDTO()),
+            source: sfu_models
+                .ParticipantSource.PARTICIPANT_SOURCE_WEBRTC_UNSPECIFIED,
           ),
         ),
       );
@@ -624,6 +637,8 @@ class CallSession extends Disposable {
         stateManager.sfuDominantSpeakerChanged(event);
       } else if (event is SfuPinsUpdatedEvent) {
         stateManager.sfuPinsUpdated(event.pins);
+      } else if (event is SfuInboundStateNotificationEvent) {
+        stateManager.sfuInboundStateNotification(event);
       }
     });
   }
@@ -857,9 +872,11 @@ class CallSession extends Disposable {
         return;
       }
 
-      final ansResult = await pc.setRemoteAnswer(pubResult.data.sdp);
-      if (ansResult is! Success<void>) {
-        _logger.w(() => '[negotiate] #setRemoteAnswer; failed: $ansResult');
+      if (pubResult.data.hasSdp()) {
+        final ansResult = await pc.setRemoteAnswer(pubResult.data.sdp);
+        if (ansResult is! Success<void>) {
+          _logger.w(() => '[negotiate] #setRemoteAnswer; failed: $ansResult');
+        }
       }
     });
   }
@@ -869,6 +886,21 @@ class CallSession extends Disposable {
     RtcRemoteTrack remoteTrack,
   ) async {
     _logger.d(() => '[onRemoteTrackReceived] remoteTrack: $remoteTrack');
+
+    if (CurrentPlatform.isAndroid &&
+        remoteTrack.isAudioTrack &&
+        _streamVideo.options.androidAudioConfiguration != null) {
+      try {
+        await rtc.Helper.setAndroidAudioConfiguration(
+          _streamVideo.options.androidAudioConfiguration!,
+        );
+      } catch (e) {
+        _logger.w(
+          () =>
+              '[onRemoteTrackReceived] Failed to apply Android audio configuration: $e',
+        );
+      }
+    }
 
     // Start the track.
     await remoteTrack.start();
@@ -1071,6 +1103,7 @@ extension RtcTracksInfoMapper on List<RtcTrackInfo> {
             ),
             bitrate: layer.parameters.encoding.maxBitrate,
             fps: layer.parameters.encoding.maxFramerate,
+            quality: layer.parameters.encoding.quality.toDTO(),
           );
         }),
       );

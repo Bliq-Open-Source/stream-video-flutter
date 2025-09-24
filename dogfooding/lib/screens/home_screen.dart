@@ -116,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
               CallRoute($extra: (
                 call: _call!,
                 connectOptions: null,
+                effectsManager: null,
               )).push(context);
             } else {
               LobbyRoute($extra: _call!).push(context);
@@ -418,7 +419,7 @@ class _JoinForm extends StatelessWidget {
         onPressed: () async {
           final result = await QrCodeScanner.scan(context);
 
-          if (context.mounted) {
+          if (context.mounted && result != null) {
             _handleJoinUrl(context, result);
           }
         },
@@ -441,7 +442,6 @@ class _JoinForm extends StatelessWidget {
     }
 
     if (environment == Environment.livestream) {
-      // TODO: handle livestream join
       // Example: https://livestream-react-demo.vercel.app/?id=6G9bxsMaFbMiGvLWWP85d&type=livestream
       final callId = uri.queryParameters['id'];
       if (callId != null) {

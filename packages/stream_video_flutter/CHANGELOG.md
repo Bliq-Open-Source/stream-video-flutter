@@ -1,4 +1,87 @@
-## Unreleased
+## 0.10.4
+
+✅ Added
+* Extended `CallParticipantState` with `participantSource`. This indicates the participant's source channel (e.g., WebRTC, RTMP, WHIP) and can be used in filtering and sorting criteria.
+* Livestream sorting preset now prioritises RTMP sources in layout sorting.
+* Automatic SFU-driven pausing of inbound video to save bandwidth and prevent visual artifacts:
+  * New `SfuClientCapability.subscriberVideoPause` (on by default). Control via `Call.enableClientCapabilities()` / `Call.disableClientCapabilities()`.
+  * New `SfuInboundStateNotificationEvent` notifies when inbound tracks are paused or resumed.
+  * `CallParticipantState.pausedTracks` and `CallParticipantState.isTrackPaused()` let you check which tracks are currently paused.
+* Added capability to remove a participant from a call via `call.kickUser()`. Requires the `kick-user` permission.
+
+🐞 Fixed
+* Multitasking camera on iOS is now enabled only once and kept enabled. This fixes potential errors when quickly toggling camera.
+
+## 0.10.3
+
+🐞 Fixed
+* Handled SFU stats reporting failures gracefully
+
+✅ Added
+* Added option to configure android audio configuration when initializing `StreamVideo` instance by providing `androidAudioConfiguration` to `StreamVideoOptions`.
+
+## 0.10.2
+
+✅ Added
+* Added support for setting video filters before the video track is created by listening for local participant state changes and applying the filters once the video is enabled.
+* Added support for setting video filters on a specific video track before the local participant is available — useful for scenarios like lobby previews with a temporary video track.
+* Introduced the `reconnectTimeout` option in `CallPreferences`, allowing you to set the maximum duration the SDK will attempt to reconnect to a call before giving up.
+
+🔄 Changed
+* Deprecated `callRejoinTimeout` in `RetryConfig`, instead added `networkAvailabilityTimeout` to `CallPreferences` to control how long the SDK waits for network connectivity to be restored during reconnection attempts before timing out.
+
+🔄 Dependency updates
+* Updated `flutter_callkit_incoming` dependency to version 2.5.7. That version contains Android 14 compatibility fixes for ringing notifications and lock screen handling.
+
+🐞 Fixed
+* (Android) CircleTransform Argument type mismatch on Bitmap.Config?
+* Sorting of participants after screen sharing stopped.
+* Fixed an issue where video filters were cleared after toggling the camera.
+* (Windows) Fixed `DtlsSrtpKeyAgreement` audio constraint parameter mapping
+
+## 0.10.1
+
+🐞 Fixed
+* (iOS) Fixed Picture-in-Picture (PiP) issue where remote participants joining during active PiP mode would not have their video tracks displayed properly.
+* (iOS) Fixed a visual issue where the Picture-in-Picture view displayed an empty container when participant name and microphone indicator settings were disabled.
+* Fixed an issue where the last reaction was removed too fast when a user sends multiple reactions quickly after each other.
+* Fixed an issue where toggling camera enabled quickly could cause AVCaptureMultiCamSession to crash.
+* Fixed an issue where the default camera selection would occasionally be incorrect even when properly configured.
+* Fixed an issue where changing the audio input device while muted from the start of a call would not apply the new device when unmuting. The selected device will now be correctly set upon unmuting.
+
+✅ Added
+* Added support for customization of display name for ringing notifications by providing `display_name` custom data to the call. See the [documentation](https://getstream.io/video/docs/flutter/advanced/incoming-calls/customization/#display-name-customization) for details.
+
+## 0.10.0
+
+🚧 (Android) Picture-in-Picture (PiP) Improvements - Breaking Change
+* **Simplified Setup:** Introduced `StreamFlutterActivity` - extend it instead of `FlutterActivity` for automatic PiP support.
+* **Automatic Activation:** PiP now triggers automatically when users press home button or background the app during calls.
+* **Fixed Overlay Issues:** PiP view can no longer be overlapped by other widgets and will always display the correct video layout.
+* **Migration Required:** In your `MainActivity`, remove the manual `onUserLeaveHint()` implementation and extend the MainActivity with `StreamFlutterActivity`. Previously required manually calling `PictureInPictureHelper.enterPictureInPictureIfInCall(this)` - now handled automatically.
+* **Removed Deprecated Methods:** Removed the deprecated `setPictureInPictureEnabled` method from `StreamVideoFlutterPlatform`, `StreamVideoFlutterBackground`, and `MethodChannelStreamVideoFlutter` classes, and the deprecated `enterPictureInPictureIfInCall` method from `PictureInPictureHelper` (Android). PiP is now handled automatically by `StreamPictureInPictureAndroidView`.
+
+🔄 Partial State Updates:
+
+For a more detailed explanation check [the dedicated documentation](https://github.com/GetStream/stream-video-flutter/blob/main/packages/stream_video_flutter/docs/partial_state_update_changes.md).
+* Added `call.partialState` for more specific and efficient state updates.
+* Added callbacks in `StreamCallContainer`, `StreamCallContent`, `StreamIncomingCallContent`, and others that no longer return a state.
+By (only) using these callbacks the root widgets will use more efficient partial state updates.
+* Added `PartialCallStateBuilder` to help with making widgets that depend on `partialState`.
+* Deprecated old callbacks
+
+✅ Added
+* Added `setMirrorVideo` method to `Call` class to control video mirroring for participants.
+* Added `maxParticipantsExcludeOwner` and `maxParticipantsExcludeRoles` to Call limits settings, providing finer control over participant limits by allowing exclusion of call owners and specific roles from the maximum count.
+
+🐞 Fixed
+* Improved SFU error handling in Call flow and disconnect reason handling. The disconnected call state now accurately reflects the original cause of disconnection.
+* Fixed an issue where rejecting a ringing call on one device would incorrectly end the call for all already connected participants.
+* Enhanced fast reconnect mechanism with improved PeerConnection issue detection and recovery. The system now attempts multiple fast reconnects before falling back to a full call rejoin.
+* Fixed simulcast video quality by correcting resolution calculations and layer selection for optimal video track display.
+* Fixed an edge case where a call with the same CID as an incoming call is also an outgoing call to ensure the same Call instance is used.
+
+## 0.9.6
 
 ✅ Added
 * Added `handleCallInterruptionCallbacks` method to `RtcMediaDeviceNotifier` that provides an option to handle system audio interruption like incoming calls, or other media playing. See the [documentation](https://getstream.io/video/docs/flutter/advanced/handling-system-audio-interruptions/) for details.

@@ -52,6 +52,20 @@ class CoordinatorDisconnectedEvent extends CoordinatorEvent {
   List<Object?> get props => [connectionId, userId, closeCode, closeReason];
 }
 
+/// Fired when web socket reconnected.
+class CoordinatorReconnectedEvent extends CoordinatorEvent {
+  const CoordinatorReconnectedEvent({
+    this.connectionId,
+    this.userId,
+  });
+
+  final String? connectionId;
+  final String? userId;
+
+  @override
+  List<Object?> get props => [connectionId, userId];
+}
+
 /// Sent periodically by the server to keep the connection alive.
 class CoordinatorHealthCheckEvent extends CoordinatorEvent {
   const CoordinatorHealthCheckEvent({
@@ -190,10 +204,16 @@ class CoordinatorCallEndedEvent extends CoordinatorCallEvent {
     required this.callCid,
     required this.endedBy,
     required this.createdAt,
+    required this.metadata,
+    required this.type,
+    this.reason,
   });
 
   @override
   final StreamCallCid callCid;
+  final CallMetadata metadata;
+  final String type;
+  final String? reason;
   final CallUser? endedBy;
   final DateTime createdAt;
 
@@ -400,11 +420,13 @@ class CoordinatorCallTranscriptionFailedEvent extends CoordinatorCallEvent {
   const CoordinatorCallTranscriptionFailedEvent({
     required this.callCid,
     required this.createdAt,
+    this.error,
   });
 
   @override
   final StreamCallCid callCid;
   final DateTime createdAt;
+  final String? error;
 
   @override
   List<Object?> get props => [
@@ -551,6 +573,24 @@ class CoordinatorCallUserUnblockedEvent extends CoordinatorCallEvent {
 
   @override
   List<Object?> get props => [...super.props, createdAt, user];
+}
+
+class CoordinatorCallUserKickedEvent extends CoordinatorCallEvent {
+  const CoordinatorCallUserKickedEvent({
+    required this.callCid,
+    required this.createdAt,
+    required this.user,
+    required this.kickedByUser,
+  });
+
+  @override
+  final StreamCallCid callCid;
+  final DateTime createdAt;
+  final CallUser user;
+  final CallUser? kickedByUser;
+
+  @override
+  List<Object?> get props => [...super.props, createdAt, user, kickedByUser];
 }
 
 class CoordinatorCallReactionEvent extends CoordinatorCallEvent {

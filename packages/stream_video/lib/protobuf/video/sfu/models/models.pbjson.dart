@@ -79,6 +79,26 @@ final $typed_data.Uint8List trackTypeDescriptor = $convert.base64Decode(
     'VESU8QARIUChBUUkFDS19UWVBFX1ZJREVPEAISGwoXVFJBQ0tfVFlQRV9TQ1JFRU5fU0hBUkUQ'
     'AxIhCh1UUkFDS19UWVBFX1NDUkVFTl9TSEFSRV9BVURJTxAE');
 
+@$core.Deprecated('Use participantSourceDescriptor instead')
+const ParticipantSource$json = {
+  '1': 'ParticipantSource',
+  '2': [
+    {'1': 'PARTICIPANT_SOURCE_WEBRTC_UNSPECIFIED', '2': 0},
+    {'1': 'PARTICIPANT_SOURCE_RTMP', '2': 1},
+    {'1': 'PARTICIPANT_SOURCE_WHIP', '2': 2},
+    {'1': 'PARTICIPANT_SOURCE_SIP', '2': 3},
+    {'1': 'PARTICIPANT_SOURCE_RTSP', '2': 4},
+    {'1': 'PARTICIPANT_SOURCE_SRT', '2': 5},
+  ],
+};
+
+/// Descriptor for `ParticipantSource`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List participantSourceDescriptor = $convert.base64Decode(
+    'ChFQYXJ0aWNpcGFudFNvdXJjZRIpCiVQQVJUSUNJUEFOVF9TT1VSQ0VfV0VCUlRDX1VOU1BFQ0'
+    'lGSUVEEAASGwoXUEFSVElDSVBBTlRfU09VUkNFX1JUTVAQARIbChdQQVJUSUNJUEFOVF9TT1VS'
+    'Q0VfV0hJUBACEhoKFlBBUlRJQ0lQQU5UX1NPVVJDRV9TSVAQAxIbChdQQVJUSUNJUEFOVF9TT1'
+    'VSQ0VfUlRTUBAEEhoKFlBBUlRJQ0lQQU5UX1NPVVJDRV9TUlQQBQ==');
+
 @$core.Deprecated('Use errorCodeDescriptor instead')
 const ErrorCode$json = {
   '1': 'ErrorCode',
@@ -95,7 +115,9 @@ const ErrorCode$json = {
     {'1': 'ERROR_CODE_PARTICIPANT_MIGRATING', '2': 203},
     {'1': 'ERROR_CODE_PARTICIPANT_RECONNECT_FAILED', '2': 204},
     {'1': 'ERROR_CODE_PARTICIPANT_MEDIA_TRANSPORT_FAILURE', '2': 205},
+    {'1': 'ERROR_CODE_PARTICIPANT_SIGNAL_LOST', '2': 206},
     {'1': 'ERROR_CODE_CALL_NOT_FOUND', '2': 300},
+    {'1': 'ERROR_CODE_CALL_PARTICIPANT_LIMIT_REACHED', '2': 301},
     {'1': 'ERROR_CODE_REQUEST_VALIDATION_FAILED', '2': 400},
     {'1': 'ERROR_CODE_UNAUTHENTICATED', '2': 401},
     {'1': 'ERROR_CODE_PERMISSION_DENIED', '2': 403},
@@ -117,12 +139,13 @@ final $typed_data.Uint8List errorCodeDescriptor = $convert.base64Decode(
     'Q09ERV9QQVJUSUNJUEFOVF9NSUdSQVRJT05fRkFJTEVEEMoBEiUKIEVSUk9SX0NPREVfUEFSVE'
     'lDSVBBTlRfTUlHUkFUSU5HEMsBEiwKJ0VSUk9SX0NPREVfUEFSVElDSVBBTlRfUkVDT05ORUNU'
     'X0ZBSUxFRBDMARIzCi5FUlJPUl9DT0RFX1BBUlRJQ0lQQU5UX01FRElBX1RSQU5TUE9SVF9GQU'
-    'lMVVJFEM0BEh4KGUVSUk9SX0NPREVfQ0FMTF9OT1RfRk9VTkQQrAISKQokRVJST1JfQ09ERV9S'
-    'RVFVRVNUX1ZBTElEQVRJT05fRkFJTEVEEJADEh8KGkVSUk9SX0NPREVfVU5BVVRIRU5USUNBVE'
-    'VEEJEDEiEKHEVSUk9SX0NPREVfUEVSTUlTU0lPTl9ERU5JRUQQkwMSIQocRVJST1JfQ09ERV9U'
-    'T09fTUFOWV9SRVFVRVNUUxCtAxIlCiBFUlJPUl9DT0RFX0lOVEVSTkFMX1NFUlZFUl9FUlJPUh'
-    'D0AxIhChxFUlJPUl9DT0RFX1NGVV9TSFVUVElOR19ET1dOENgEEhgKE0VSUk9SX0NPREVfU0ZV'
-    'X0ZVTEwQvAU=');
+    'lMVVJFEM0BEicKIkVSUk9SX0NPREVfUEFSVElDSVBBTlRfU0lHTkFMX0xPU1QQzgESHgoZRVJS'
+    'T1JfQ09ERV9DQUxMX05PVF9GT1VORBCsAhIuCilFUlJPUl9DT0RFX0NBTExfUEFSVElDSVBBTl'
+    'RfTElNSVRfUkVBQ0hFRBCtAhIpCiRFUlJPUl9DT0RFX1JFUVVFU1RfVkFMSURBVElPTl9GQUlM'
+    'RUQQkAMSHwoaRVJST1JfQ09ERV9VTkFVVEhFTlRJQ0FURUQQkQMSIQocRVJST1JfQ09ERV9QRV'
+    'JNSVNTSU9OX0RFTklFRBCTAxIhChxFUlJPUl9DT0RFX1RPT19NQU5ZX1JFUVVFU1RTEK0DEiUK'
+    'IEVSUk9SX0NPREVfSU5URVJOQUxfU0VSVkVSX0VSUk9SEPQDEiEKHEVSUk9SX0NPREVfU0ZVX1'
+    'NIVVRUSU5HX0RPV04Q2AQSGAoTRVJST1JfQ09ERV9TRlVfRlVMTBC8BQ==');
 
 @$core.Deprecated('Use sdkTypeDescriptor instead')
 const SdkType$json = {
@@ -264,6 +287,20 @@ final $typed_data.Uint8List appleThermalStateDescriptor = $convert.base64Decode(
     'RV9GQUlSEAISHwobQVBQTEVfVEhFUk1BTF9TVEFURV9TRVJJT1VTEAMSIAocQVBQTEVfVEhFUk'
     '1BTF9TVEFURV9DUklUSUNBTBAE');
 
+@$core.Deprecated('Use clientCapabilityDescriptor instead')
+const ClientCapability$json = {
+  '1': 'ClientCapability',
+  '2': [
+    {'1': 'CLIENT_CAPABILITY_UNSPECIFIED', '2': 0},
+    {'1': 'CLIENT_CAPABILITY_SUBSCRIBER_VIDEO_PAUSE', '2': 1},
+  ],
+};
+
+/// Descriptor for `ClientCapability`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List clientCapabilityDescriptor = $convert.base64Decode(
+    'ChBDbGllbnRDYXBhYmlsaXR5EiEKHUNMSUVOVF9DQVBBQklMSVRZX1VOU1BFQ0lGSUVEEAASLA'
+    'ooQ0xJRU5UX0NBUEFCSUxJVFlfU1VCU0NSSUJFUl9WSURFT19QQVVTRRAB');
+
 @$core.Deprecated('Use callStateDescriptor instead')
 const CallState$json = {
   '1': 'CallState',
@@ -397,6 +434,14 @@ const Participant$json = {
       '10': 'custom'
     },
     {'1': 'roles', '3': 13, '4': 3, '5': 9, '10': 'roles'},
+    {
+      '1': 'source',
+      '3': 14,
+      '4': 1,
+      '5': 14,
+      '6': '.stream.video.sfu.models.ParticipantSource',
+      '10': 'source'
+    },
   ],
 };
 
@@ -412,7 +457,8 @@ final $typed_data.Uint8List participantDescriptor = $convert.base64Decode(
     '5hbnRfc3BlYWtlchgIIAEoCFIRaXNEb21pbmFudFNwZWFrZXISHwoLYXVkaW9fbGV2ZWwYCSAB'
     'KAJSCmF1ZGlvTGV2ZWwSEgoEbmFtZRgKIAEoCVIEbmFtZRIUCgVpbWFnZRgLIAEoCVIFaW1hZ2'
     'USLwoGY3VzdG9tGAwgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdFIGY3VzdG9tEhQKBXJv'
-    'bGVzGA0gAygJUgVyb2xlcw==');
+    'bGVzGA0gAygJUgVyb2xlcxJCCgZzb3VyY2UYDiABKA4yKi5zdHJlYW0udmlkZW8uc2Z1Lm1vZG'
+    'Vscy5QYXJ0aWNpcGFudFNvdXJjZVIGc291cmNl');
 
 @$core.Deprecated('Use streamQualityDescriptor instead')
 const StreamQuality$json = {
@@ -557,6 +603,7 @@ const PublishOption$json = {
       '10': 'videoDimension'
     },
     {'1': 'id', '3': 8, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'use_single_layer', '3': 9, '4': 1, '5': 8, '10': 'useSingleLayer'},
   ],
 };
 
@@ -568,7 +615,8 @@ final $typed_data.Uint8List publishOptionDescriptor = $convert.base64Decode(
     'ZwcxgEIAEoBVIDZnBzEiwKEm1heF9zcGF0aWFsX2xheWVycxgFIAEoBVIQbWF4U3BhdGlhbExh'
     'eWVycxIuChNtYXhfdGVtcG9yYWxfbGF5ZXJzGAYgASgFUhFtYXhUZW1wb3JhbExheWVycxJQCg'
     '92aWRlb19kaW1lbnNpb24YByABKAsyJy5zdHJlYW0udmlkZW8uc2Z1Lm1vZGVscy5WaWRlb0Rp'
-    'bWVuc2lvblIOdmlkZW9EaW1lbnNpb24SDgoCaWQYCCABKAVSAmlk');
+    'bWVuc2lvblIOdmlkZW9EaW1lbnNpb24SDgoCaWQYCCABKAVSAmlkEigKEHVzZV9zaW5nbGVfbG'
+    'F5ZXIYCSABKAhSDnVzZVNpbmdsZUxheWVy');
 
 @$core.Deprecated('Use codecDescriptor instead')
 const Codec$json = {

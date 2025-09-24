@@ -52,6 +52,24 @@ class CoordinatorClientRetry extends CoordinatorClient {
   }
 
   @override
+  Future<Result<None>> kickUser({
+    required StreamCallCid callCid,
+    required String userId,
+    bool block = false,
+  }) {
+    return _retryManager.execute(
+      () => _delegate.kickUser(
+        callCid: callCid,
+        userId: userId,
+        block: block,
+      ),
+      (error, nextAttemptDelay) async {
+        _logRetry('kickUser', error, nextAttemptDelay);
+      },
+    );
+  }
+
+  @override
   Future<Result<None>> createDevice({
     required String id,
     required PushProvider pushProvider,
@@ -577,11 +595,15 @@ class CoordinatorClientRetry extends CoordinatorClient {
   @override
   Future<Result<None>> startTranscription(
     StreamCallCid callCid, {
+    bool? enableClosedCaptions,
+    TranscriptionSettingsLanguage? language,
     String? transcriptionExternalStorage,
   }) {
     return _retryManager.execute(
       () => _delegate.startTranscription(
         callCid,
+        enableClosedCaptions: enableClosedCaptions,
+        language: language,
         transcriptionExternalStorage: transcriptionExternalStorage,
       ),
       (error, nextAttemptDelay) async {
@@ -613,9 +635,19 @@ class CoordinatorClientRetry extends CoordinatorClient {
   }
 
   @override
-  Future<Result<None>> startClosedCaptions(StreamCallCid callCid) {
+  Future<Result<None>> startClosedCaptions(
+    StreamCallCid callCid, {
+    bool? enableTranscription,
+    TranscriptionSettingsLanguage? language,
+    String? transcriptionExternalStorage,
+  }) {
     return _retryManager.execute(
-      () => _delegate.startClosedCaptions(callCid),
+      () => _delegate.startClosedCaptions(
+        callCid,
+        enableTranscription: enableTranscription,
+        language: language,
+        transcriptionExternalStorage: transcriptionExternalStorage,
+      ),
       (error, nextAttemptDelay) async {
         _logRetry('startClosedCaptions', error, nextAttemptDelay);
       },
@@ -665,6 +697,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
     StreamBroadcastingSettings? broadcasting,
     StreamSessionSettings? session,
     StreamFrameRecordingSettings? frameRecording,
+    StreamIngressSettings? ingress,
   }) {
     return _retryManager.execute(
       () => _delegate.updateCall(
@@ -682,6 +715,7 @@ class CoordinatorClientRetry extends CoordinatorClient {
         limits: limits,
         session: session,
         frameRecording: frameRecording,
+        ingress: ingress,
       ),
       (error, nextAttemptDelay) async {
         _logRetry('updateCall', error, nextAttemptDelay);

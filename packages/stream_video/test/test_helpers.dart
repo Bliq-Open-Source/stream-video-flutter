@@ -1,11 +1,54 @@
 import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:stream_video/src/call/permissions/permissions_manager.dart';
+import 'package:stream_video/src/call/session/call_session.dart';
+import 'package:stream_video/src/call/session/call_session_factory.dart';
+import 'package:stream_video/src/call/state/call_state_notifier.dart';
+import 'package:stream_video/src/call/stats/tracer.dart';
+import 'package:stream_video/src/core/client_state.dart';
+import 'package:stream_video/src/sfu/sfu_client.dart';
+import 'package:stream_video/src/webrtc/sdp/editor/sdp_editor.dart';
 import 'package:stream_video/stream_video.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+class MockCall extends Mock implements Call {}
 
 class MockCoordinatorClient extends Mock implements CoordinatorClient {}
 
 class MockRtcMediaDeviceNotifier extends Mock
     implements RtcMediaDeviceNotifier {}
+
+class MockStreamVideo extends Mock implements StreamVideo {}
+
+class MockCallStateNotifier extends Mock implements CallStateNotifier {}
+
+class MockPermissionsManager extends Mock implements PermissionsManager {}
+
+class MockInternetConnection extends Mock implements InternetConnection {}
+
+class MockRetryPolicy extends Mock implements RetryPolicy {}
+
+class MockSessionFactory extends Mock implements CallSessionFactory {}
+
+class MockDynascaleManager extends Mock implements DynascaleManager {}
+
+class MockSdpEditor extends Mock implements SdpEditor {}
+
+class MockTracer extends Mock implements Tracer {}
+
+class MockCallSession extends Mock implements CallSession {}
+
+class MockSfuClient extends Mock implements SfuClient {}
+
+class MockClientState extends Mock implements ClientState {}
+
+class MockAudioRecognition extends Mock implements AudioRecognition {}
+
+class MockWebSocketChannel extends Mock implements WebSocketChannel {}
+
+class MockWebSocketSink extends Mock implements WebSocketSink {}
+
+class MockRtcLocalTrack extends Mock implements RtcLocalTrack {}
 
 /// Helper function to create CallDetails for testing
 CallDetails createTestCallDetails({

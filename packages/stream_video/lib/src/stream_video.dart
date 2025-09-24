@@ -7,6 +7,7 @@ import 'package:internet_connection_checker_plus/internet_connection_checker_plu
 import 'package:meta/meta.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:rxdart/rxdart.dart';
+import 'package:stream_webrtc_flutter/stream_webrtc_flutter.dart' as rtc;
 import 'package:uuid/uuid.dart';
 
 import '../globals.dart';
@@ -135,7 +136,7 @@ class StreamVideo extends Disposable {
   }
 
   StreamVideo._(
-    String apiKey, {
+    this.apiKey, {
     required User user,
     required StreamVideoOptions options,
     String? userToken,
@@ -174,6 +175,19 @@ class StreamVideo extends Disposable {
         pushNotificationManagerProvider?.call(_client, this);
 
     _state.user.value = user;
+
+    if (CurrentPlatform.isAndroid || CurrentPlatform.isIos) {
+      unawaited(
+        rtc.WebRTC.initialize(
+          options: {
+            if (CurrentPlatform.isAndroid &&
+                options.androidAudioConfiguration != null)
+              'androidAudioConfiguration':
+                  options.androidAudioConfiguration!.toMap(),
+          },
+        ),
+      );
+    }
 
     final tokenProvider = switch (user.type) {
       UserType.authenticated => TokenProvider.from(
@@ -244,6 +258,7 @@ class StreamVideo extends Disposable {
   final _logger = taggedLogger(tag: _tag);
 
   final StreamVideoOptions _options;
+  final String apiKey;
 
   @Deprecated('Use options.muteVideoWhenInBackground instead')
   bool get muteVideoWhenInBackground => _options.muteVideoWhenInBackground;
@@ -453,6 +468,15 @@ class StreamVideo extends Disposable {
         event.metadata.details.createdBy.id != currentUserId &&
         event.data.ringing) {
       _logger.v(() => '[onCoordinatorEvent] onCallRinging: ${event.data}');
+
+      // In a edge case where call with the same CID as the incoming call is also an outgoing call
+      // we want to use the same Call instance.
+      if (state.outgoingCall.valueOrNull?.callCid.value ==
+          event.data.callCid.value) {
+        _state.incomingCall.value = state.outgoingCall.valueOrNull;
+        return;
+      }
+
       final call = _makeCallFromRinging(data: event.data);
       _state.incomingCall.value = call;
     } else if (event is CoordinatorConnectedEvent) {
@@ -465,6 +489,30 @@ class StreamVideo extends Disposable {
       _connectionState = ConnectionState.disconnected(
         _state.currentUser.id,
       );
+    } else if (event is CoordinatorReconnectedEvent) {
+      _logger.i(() => '[onCoordinatorEvent] reconnected ${event.userId}');
+      if (state.watchedCalls.value.isNotEmpty) {
+        // Re-watch the previously watched calls.
+        unawaited(
+          queryCalls(
+            watch: true,
+            filterConditions: {
+              'cid': {
+                r'$in': state.watchedCalls.value
+                    .map((call) => call.callCid.value)
+                    .toList(),
+              },
+            },
+          ).onError(
+            (error, stackTrace) {
+              _logger.e(
+                () => '[onCoordinatorEvent] re-watching calls failed: $error',
+              );
+              return Result.failure(VideoErrors.compose(error, stackTrace));
+            },
+          ),
+        );
+      }
     }
   }
 
@@ -887,6 +935,8 @@ class StreamVideo extends Disposable {
 
     final createdById = payload['created_by_id'] as String?;
     final createdByName = payload['created_by_display_name'] as String?;
+    final callDisplayName = payload['call_display_name'] as String?;
+
     final hasVideo = payload['video'] as String?;
 
     final type = payload['type'] as String?;
@@ -895,7 +945,9 @@ class StreamVideo extends Disposable {
         manager.showMissedCall(
           uuid: callUUID,
           handle: createdById,
-          nameCaller: createdByName,
+          nameCaller: (callDisplayName?.isNotEmpty ?? false)
+              ? callDisplayName
+              : createdByName,
           callCid: callCid,
         ),
       );
@@ -916,7 +968,9 @@ class StreamVideo extends Disposable {
           manager.showIncomingCall(
             uuid: callUUID,
             handle: createdById,
-            nameCaller: createdByName,
+            nameCaller: (callDisplayName?.isNotEmpty ?? false)
+                ? callDisplayName
+                : createdByName,
             callCid: callCid,
             hasVideo: hasVideo != 'false',
           ),
@@ -1155,6 +1209,7 @@ class StreamVideoOptions {
     this.keepConnectionsAliveWhenInBackground = false,
     this.networkMonitorSettings = const NetworkMonitorSettings(),
     this.allowMultipleActiveCalls = false,
+    this.androidAudioConfiguration,
   });
 
   final String coordinatorRpcUrl;
@@ -1182,4 +1237,6 @@ class StreamVideoOptions {
 
   /// Returns the current [NetworkMonitorSettings].
   final NetworkMonitorSettings networkMonitorSettings;
+
+  final rtc.AndroidAudioConfiguration? androidAudioConfiguration;
 }

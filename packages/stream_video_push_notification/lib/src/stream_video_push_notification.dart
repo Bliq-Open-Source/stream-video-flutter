@@ -6,7 +6,7 @@ import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:stream_video/stream_video.dart' hide CallEvent;
+import 'package:stream_video/stream_video.dart';
 import 'package:stream_video_push_notification/stream_video_push_notification_platform_interface.dart';
 
 import 'stream_video_push_params.dart';
@@ -32,6 +32,11 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
   static create({
     required StreamVideoPushProvider iosPushProvider,
     required StreamVideoPushProvider androidPushProvider,
+    @Deprecated(
+      "Caller customization is deprecated as it was not fully compatible with iOS "
+      "(foreground calls only). Use 'display_name' custom field in the call instead. "
+      "See details: https://getstream.io/video/docs/flutter/advanced/incoming-calls/customization/#display-name-customization",
+    )
     CallerCustomizationFunction? callerCustomizationCallback,
     @Deprecated(
         'Background handler is no longer needed for terminated state ringing on iOS.')
@@ -220,6 +225,11 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
   final StreamVideoPushProvider iosPushProvider;
   final StreamVideoPushProvider androidPushProvider;
   final StreamVideoPushParams pushParams;
+  @Deprecated(
+    "Caller customization is deprecated as it was not fully compatible with iOS "
+    "(foreground calls only). Use 'display_name' custom field in the call instead. "
+    "See details: https://getstream.io/video/docs/flutter/advanced/incoming-calls/customization/#display-name-customization",
+  )
   final CallerCustomizationFunction? callerCustomizationCallback;
   final bool registerApnDeviceToken;
   late SharedPreferences _sharedPreferences;
@@ -315,6 +325,7 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
     String? nameCaller,
     bool hasVideo = true,
   }) {
+    // ignore: deprecated_member_use_from_same_package
     final customData = callerCustomizationCallback?.call(
       callCid: callCid,
       callerName: nameCaller,
@@ -342,6 +353,7 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
     String? nameCaller,
     bool hasVideo = true,
   }) {
+    // ignore: deprecated_member_use_from_same_package
     final customData = callerCustomizationCallback?.call(
       callCid: callCid,
       callerName: nameCaller,
@@ -545,6 +557,7 @@ extension on CallEvent {
       Event.actionCallEnded => ActionCallEnded(data: toCallData()),
       Event.actionCallTimeout => ActionCallTimeout(data: toCallData()),
       Event.actionCallCallback => ActionCallCallback(data: toCallData()),
+      Event.actionCallConnected => ActionCallConnected(data: toCallData()),
       Event.actionDidUpdateDevicePushTokenVoip =>
         ActionDidUpdateDevicePushTokenVoip(
           token: body['deviceTokenVoIP'] as String,
